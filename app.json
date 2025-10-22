@@ -1,0 +1,28 @@
+{
+  "expo": {
+    "name": "Camiones Mobile",
+    "slug": "camiones-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#2196F3"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.camionesmobile.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#2196F3"
+      },
+      "package": "com.camionesmobile.app"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "4e479326-a3ff-4c41-a9e1-66c889eb80dd"
+      }
+    }
+  }
+}
