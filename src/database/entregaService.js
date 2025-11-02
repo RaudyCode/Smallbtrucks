@@ -60,7 +60,10 @@ export const entregaService = {
         SELECT 
           e.fecha_entrega,
           c.nombre as camion_nombre,
+          c.dueno as camion_dueno,
           d.nombre as destino_nombre,
+          d.ubicacion as destino_ubicacion,
+          v.lugar_inicio,
           SUM(e.cantidad) as total_entregas,
           v.id as viaje_id
         FROM EntregaViaje e
@@ -84,6 +87,8 @@ export const entregaService = {
         SELECT 
           e.fecha_entrega,
           d.nombre as destino_nombre,
+          d.ubicacion as destino_ubicacion,
+          v.lugar_inicio,
           SUM(e.cantidad) as total_entregas,
           v.id as viaje_id
         FROM EntregaViaje e

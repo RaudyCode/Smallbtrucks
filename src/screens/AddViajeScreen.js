@@ -1,9 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, ScrollView, Dimensions, KeyboardAvoidingView, Platform, Modal, FlatList } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, Dimensions, KeyboardAvoidingView, Platform, Modal, FlatList, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { camionService } from '../database/camionService';
 import { destinoService } from '../database/destinoService';
 import { viajeService } from '../database/viajeService';
+import { colors } from '../theme/colors';
+import { Card, ActionButton } from '../components/common';
 
 const { width: screenWidth } = Dimensions.get('window');
 const cardPadding = Math.max(16, screenWidth * 0.04);
@@ -19,6 +23,11 @@ export default function AddViajeScreen({ route, navigation }) {
   const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0]);
   const [showCamionModal, setShowCamionModal] = useState(false);
   const [showDestinoModal, setShowDestinoModal] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [searchCamion, setSearchCamion] = useState('');
+  const [searchDestino, setSearchDestino] = useState('');
+  const [startLocation, setStartLocation] = useState('');
 
   useEffect(() => {
     loadData();
@@ -33,7 +42,6 @@ export default function AddViajeScreen({ route, navigation }) {
       setCamiones(camionesData);
       setDestinos(destinosData);
       
-      // Preseleccionar camión si viene de CamionDetail
       if (preselectedCamionId) {
         const camion = camionesData.find(c => c.id === preselectedCamionId);
         if (camion) setSelectedCamion(camion);
@@ -44,231 +52,645 @@ export default function AddViajeScreen({ route, navigation }) {
     }
   };
 
+  const filteredCamiones = camiones.filter(camion => {
+    const searchLower = searchCamion.toLowerCase().trim();
+    if (!searchLower) return true;
+    return (
+      camion.nombre.toLowerCase().includes(searchLower) ||
+      (camion.dueno && camion.dueno.toLowerCase().includes(searchLower))
+    );
+  });
+
+  const filteredDestinos = destinos.filter(destino => {
+    const searchLower = searchDestino.toLowerCase().trim();
+    if (!searchLower) return true;
+    return (
+      destino.nombre.toLowerCase().includes(searchLower) ||
+      (destino.ubicacion && destino.ubicacion.toLowerCase().includes(searchLower))
+    );
+  });
+
   const handleSubmit = async () => {
     if (!selectedCamion || !selectedDestino || !cantidadViajes) {
-      Alert.alert('Error', 'Completa todos los campos');
+      Alert.alert('Error', 'Completa todos los campos obligatorios');
       return;
     }
+
+    if (!startLocation || startLocation.trim() === '') {
+      Alert.alert('Error', 'Por favor, ingresa el lugar de inicio del viaje');
+      return;
+    }
+
     try {
-      await viajeService.create(selectedCamion.id, selectedDestino.id, parseInt(cantidadViajes), fecha);
-      Alert.alert('Éxito', 'Viaje registrado correctamente', [
-        { text: 'OK', onPress: () => navigation.goBack() }
+      await viajeService.create(
+        selectedCamion.id, 
+        selectedDestino.id, 
+        parseInt(cantidadViajes), 
+        fecha,
+        startLocation.trim()
+      );
+      
+      Alert.alert('Éxito', 'Pedido registrado correctamente', [
+        { 
+          text: 'OK', 
+          onPress: () => {
+            // Navegar a la pantalla de Viajes en lugar de solo volver atrás
+            navigation.navigate('HomeTabs', { 
+              screen: 'Viajes',
+              params: { refresh: Date.now() }
+            });
+          }
+        }
       ]);
     } catch (error) {
-      console.error('Error guardando viaje:', error);
-      Alert.alert('Error', 'No se pudo guardar el viaje: ' + error.message);
+      console.error('Error guardando pedido:', error);
+      Alert.alert('Error', 'No se pudo guardar el pedido: ' + error.message);
     }
   };
 
   return (
-    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView style={styles.scroll}>
-        <View style={styles.form}>
-          {/* Selector de Camión */}
-          <Text style={styles.label}>Camión *</Text>
-          <TouchableOpacity 
-            style={styles.selector}
-            onPress={() => setShowCamionModal(true)}
+    <View style={styles.container}>
+      <SafeAreaView edges={['top']} style={styles.safeArea}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.keyboardView}
+        >
+          <ScrollView 
+            style={styles.scrollView}
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
           >
-            <Text style={selectedCamion ? styles.selectedText : styles.placeholderText}>
-              {selectedCamion ? `🚛 ${selectedCamion.nombre}` : 'Seleccionar camión...'}
-            </Text>
-            <Text style={styles.arrow}>▼</Text>
-          </TouchableOpacity>
-          
-          {/* Selector de Destino */}
-          <Text style={styles.label}>Destino *</Text>
-          <TouchableOpacity 
-            style={styles.selector}
-            onPress={() => setShowDestinoModal(true)}
-          >
-            <Text style={selectedDestino ? styles.selectedText : styles.placeholderText}>
-              {selectedDestino ? `📍 ${selectedDestino.nombre}` : 'Seleccionar destino...'}
-            </Text>
-            <Text style={styles.arrow}>▼</Text>
-          </TouchableOpacity>
-
-          <Text style={styles.label}>Cantidad de Viajes *</Text>
-          <TextInput
-            style={styles.input}
-            value={cantidadViajes}
-            onChangeText={setCantidadViajes}
-            placeholder="Ej: 5"
-            keyboardType="number-pad"
-          />
-
-          <Text style={styles.label}>Fecha Programada *</Text>
-          <TextInput
-            style={styles.input}
-            value={fecha}
-            onChangeText={setFecha}
-            placeholder="YYYY-MM-DD"
-          />
-
-          <TouchableOpacity style={styles.button} onPress={handleSubmit}>
-            <Text style={styles.buttonText}>💾 Registrar Viaje</Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
-
-      {/* Modal de Camiones */}
-      <Modal
-        visible={showCamionModal}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowCamionModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Seleccionar Camión</Text>
-              <TouchableOpacity onPress={() => setShowCamionModal(false)}>
-                <Text style={styles.modalClose}>✕</Text>
-              </TouchableOpacity>
-            </View>
-            <FlatList
-              data={camiones}
-              keyExtractor={(item) => item.id.toString()}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={styles.modalItem}
+            {/* Content Container */}
+            <View style={styles.content}>
+              <View style={styles.header}>
+                <Text style={styles.title}>Programar Pedido</Text>
+                <Text style={styles.subtitle}>Asigna un pedido con múltiples viajes</Text>
+              </View>
+            
+            <Card style={styles.formCard}>
+              {/* Selector de Camión */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Seleccionar Camión</Text>
+                <TouchableOpacity 
+                  style={styles.selector}
                   onPress={() => {
-                    setSelectedCamion(item);
+                    setSearchCamion('');
+                    setShowCamionModal(true);
+                  }}
+                >
+                  <View style={styles.selectorContent}>
+                    <MaterialCommunityIcons
+                      name="truck-delivery"
+                      size={24}
+                      color={selectedCamion ? colors.brand.secondary : colors.text.muted}
+                    />
+                    <Text style={selectedCamion ? styles.selectedText : styles.placeholderText}>
+                      {selectedCamion ? selectedCamion.nombre : 'Seleccionar camión...'}
+                    </Text>
+                  </View>
+                  <MaterialCommunityIcons
+                    name="chevron-down"
+                    size={24}
+                    color={colors.text.muted}
+                  />
+                </TouchableOpacity>
+              </View>
+              {/* Lugar de Inicio */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Lugar de Inicio del Viaje</Text>
+                <View style={styles.inputContainer}>
+                  <MaterialCommunityIcons
+                    name="map-marker-radius"
+                    size={24}
+                    color={startLocation ? colors.brand.secondary : colors.text.muted}
+                    style={styles.inputIcon}
+                  />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Ej: Oficina principal."
+                    placeholderTextColor={colors.text.muted}
+                    value={startLocation}
+                    onChangeText={setStartLocation}
+                    autoCapitalize="words"
+                  />
+                </View>
+              </View>
+
+              {/* Selector de Destino */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Seleccionar Destino</Text>
+                <TouchableOpacity 
+                  style={styles.selector}
+                  onPress={() => {
+                    setSearchDestino('');
+                    setShowDestinoModal(true);
+                  }}
+                >
+                  <View style={styles.selectorContent}>
+                    <MaterialCommunityIcons
+                      name="map-marker"
+                      size={24}
+                      color={selectedDestino ? colors.brand.secondary : colors.text.muted}
+                    />
+                    <Text style={selectedDestino ? styles.selectedText : styles.placeholderText}>
+                      {selectedDestino ? selectedDestino.nombre : 'Seleccionar destino...'}
+                    </Text>
+                  </View>
+                  <MaterialCommunityIcons
+                    name="chevron-down"
+                    size={24}
+                    color={colors.text.muted}
+                  />
+                </TouchableOpacity>
+              </View>
+
+              {/* Cantidad de Viajes */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Cantidad de Viajes del Pedido</Text>
+                <View style={styles.countContainer}>
+                  <TouchableOpacity
+                    style={styles.countButton}
+                    onPress={() => setCantidadViajes(Math.max(1, parseInt(cantidadViajes || "0") - 1).toString())}
+                  >
+                    <MaterialCommunityIcons name="minus" size={24} color={colors.text.primary} />
+                  </TouchableOpacity>
+                  <TextInput
+                    style={styles.countInput}
+                    value={cantidadViajes}
+                    onChangeText={setCantidadViajes}
+                    keyboardType="number-pad"
+                    placeholder="0"
+                    placeholderTextColor={colors.text.muted}
+                  />
+                  <TouchableOpacity
+                    style={styles.countButton}
+                    onPress={() => setCantidadViajes((parseInt(cantidadViajes || "0") + 1).toString())}
+                  >
+                    <MaterialCommunityIcons name="plus" size={24} color={colors.text.primary} />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+
+
+              {/* Fecha */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Fecha Programada</Text>
+                <TouchableOpacity 
+                  style={styles.selector}
+                  onPress={() => setShowDatePicker(true)}
+                >
+                  <View style={styles.selectorContent}>
+                    <MaterialCommunityIcons
+                      name="calendar"
+                      size={24}
+                      color={colors.brand.secondary}
+                    />
+                    <Text style={styles.selectedText}>
+                      {selectedDate.toLocaleDateString('es-ES', {
+                        weekday: 'long',
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric'
+                      })}
+                    </Text>
+                  </View>
+                  <MaterialCommunityIcons
+                    name="calendar-edit"
+                    size={24}
+                    color={colors.text.muted}
+                  />
+                </TouchableOpacity>
+              </View>
+
+              {showDatePicker && (
+                <DateTimePicker
+                  value={selectedDate}
+                  mode="date"
+                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                  onChange={(event, date) => {
+                    setShowDatePicker(Platform.OS === 'ios');
+                    if (event.type !== 'dismissed' && date) {
+                      setSelectedDate(date);
+                      setFecha(date.toISOString().split('T')[0]);
+                    }
+                  }}
+                  minimumDate={new Date()}
+                  textColor={colors.text.primary}
+                />
+              )}
+            </Card>
+          </View>
+
+          {/* Button Container */}
+          <View style={styles.buttonContainer}>
+            <ActionButton
+              icon="calendar-check"
+              title="Programar Viaje"
+              onPress={handleSubmit}
+              variant="primary"
+            />
+          </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+
+      {/* Modales */}
+      {showCamionModal && (
+        <Modal
+          visible={true}
+          transparent={true}
+          animationType="slide"
+          onRequestClose={() => setShowCamionModal(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Seleccionar Camión</Text>
+                <TouchableOpacity 
+                  style={styles.modalClose}
+                  onPress={() => {
+                    setSearchCamion('');
                     setShowCamionModal(false);
                   }}
                 >
-                  <Text style={styles.modalItemText}>🚛 {item.nombre}</Text>
-                  <Text style={styles.modalItemDetail}>
-                    {item.viajes_realizados}/{item.total_viajes} viajes
-                  </Text>
+                  <MaterialCommunityIcons
+                    name="close"
+                    size={24}
+                    color={colors.text.secondary}
+                  />
                 </TouchableOpacity>
-              )}
-              ListEmptyComponent={
-                <Text style={styles.emptyText}>No hay camiones disponibles</Text>
-              }
-            />
-          </View>
-        </View>
-      </Modal>
+              </View>
+              
+              {/* Search Bar */}
+              <View style={styles.searchContainer}>
+                <MaterialCommunityIcons
+                  name="magnify"
+                  size={24}
+                  color={colors.text.secondary}
+                  style={styles.searchIcon}
+                />
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder="Buscar por placa o dueño..."
+                  placeholderTextColor={colors.text.secondary}
+                  value={searchCamion}
+                  onChangeText={setSearchCamion}
+                  autoCapitalize="none"
+                />
+                {searchCamion.length > 0 && (
+                  <TouchableOpacity onPress={() => setSearchCamion('')}>
+                    <MaterialCommunityIcons
+                      name="close-circle"
+                      size={20}
+                      color={colors.text.secondary}
+                    />
+                  </TouchableOpacity>
+                )}
+              </View>
 
-      {/* Modal de Destinos */}
-      <Modal
-        visible={showDestinoModal}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowDestinoModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Seleccionar Destino</Text>
-              <TouchableOpacity onPress={() => setShowDestinoModal(false)}>
-                <Text style={styles.modalClose}>✕</Text>
-              </TouchableOpacity>
+              <FlatList
+                data={filteredCamiones}
+                keyExtractor={(item) => item.id.toString()}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={styles.modalItem}
+                    onPress={() => {
+                      setSelectedCamion(item);
+                      setShowCamionModal(false);
+                    }}
+                  >
+                    <View style={styles.modalItemIcon}>
+                      <MaterialCommunityIcons
+                        name="truck-delivery"
+                        size={24}
+                        color={colors.brand.primary}
+                      />
+                    </View>
+                    <View style={styles.modalItemContent}>
+                      <Text style={styles.modalItemText}>{item.nombre}</Text>
+                    </View>
+                  </TouchableOpacity>
+                )}
+                ListEmptyComponent={
+                  <View style={[styles.modalItem, { borderBottomWidth: 0 }]}>
+                    <MaterialCommunityIcons
+                      name="truck-remove"
+                      size={24}
+                      color={colors.text.muted}
+                    />
+                    <Text style={[styles.modalItemDetail, { marginLeft: 12 }]}>
+                      No hay camiones disponibles
+                    </Text>
+                  </View>
+                }
+              />
             </View>
-            <FlatList
-              data={destinos}
-              keyExtractor={(item) => item.id.toString()}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={styles.modalItem}
+          </View>
+        </Modal>
+      )}
+
+      {showDestinoModal && (
+        <Modal
+          visible={true}
+          transparent={true}
+          animationType="slide"
+          onRequestClose={() => setShowDestinoModal(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Seleccionar Destino</Text>
+                <TouchableOpacity 
+                  style={styles.modalClose}
                   onPress={() => {
-                    setSelectedDestino(item);
+                    setSearchDestino('');
                     setShowDestinoModal(false);
                   }}
                 >
-                  <Text style={styles.modalItemText}>📍 {item.nombre}</Text>
-                  <Text style={styles.modalItemDetail}>{item.ubicacion}</Text>
+                  <MaterialCommunityIcons
+                    name="close"
+                    size={24}
+                    color={colors.text.secondary}
+                  />
                 </TouchableOpacity>
-              )}
-              ListEmptyComponent={
-                <Text style={styles.emptyText}>No hay destinos disponibles</Text>
-              }
-            />
+              </View>
+
+              {/* Search Bar */}
+              <View style={styles.searchContainer}>
+                <MaterialCommunityIcons
+                  name="magnify"
+                  size={24}
+                  color={colors.text.secondary}
+                  style={styles.searchIcon}
+                />
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder="Buscar por nombre o ubicación..."
+                  placeholderTextColor={colors.text.secondary}
+                  value={searchDestino}
+                  onChangeText={setSearchDestino}
+                  autoCapitalize="none"
+                />
+                {searchDestino.length > 0 && (
+                  <TouchableOpacity onPress={() => setSearchDestino('')}>
+                    <MaterialCommunityIcons
+                      name="close-circle"
+                      size={20}
+                      color={colors.text.secondary}
+                    />
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              <FlatList
+                data={filteredDestinos}
+                keyExtractor={(item) => item.id.toString()}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={styles.modalItem}
+                    onPress={() => {
+                      setSelectedDestino(item);
+                      setShowDestinoModal(false);
+                    }}
+                  >
+                    <View style={styles.modalItemIcon}>
+                      <MaterialCommunityIcons
+                        name="map-marker"
+                        size={24}
+                        color={colors.brand.primary}
+                      />
+                    </View>
+                    <View style={styles.modalItemContent}>
+                      <Text style={styles.modalItemText}>{item.nombre}</Text>
+                      {item.ubicacion && (
+                        <Text style={styles.modalItemDetail}>{item.ubicacion}</Text>
+                      )}
+                    </View>
+                  </TouchableOpacity>
+                )}
+                ListEmptyComponent={
+                  <View style={[styles.modalItem, { borderBottomWidth: 0 }]}>
+                    <MaterialCommunityIcons
+                      name="map-marker-off"
+                      size={24}
+                      color={colors.text.muted}
+                    />
+                    <Text style={[styles.modalItemDetail, { marginLeft: 12 }]}>
+                      No hay destinos disponibles
+                    </Text>
+                  </View>
+                }
+              />
+            </View>
           </View>
-        </View>
-      </Modal>
-    </KeyboardAvoidingView>
+        </Modal>
+      )}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f5f5f5' },
-  scroll: { flex: 1 },
-  form: { padding: cardPadding },
-  label: { fontSize: 16, fontWeight: '600', color: '#333', marginBottom: 8, marginTop: 16 },
+  container: {
+    flex: 1,
+    backgroundColor: colors.background.primary,
+  },
+  safeArea: {
+    flex: 1,
+  },
+  keyboardView: {
+    flex: 1,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingBottom: 100,
+  },
+  content: {
+    flex: 1,
+  },
+  header: {
+    padding: cardPadding,
+    paddingBottom: 0,
+  },
+  title: {
+    fontSize: 28,
+    fontFamily: 'Poppins-SemiBold',
+    color: colors.text.primary,
+  },
+  subtitle: {
+    fontSize: 16,
+    fontFamily: 'Poppins-Regular',
+    color: colors.text.secondary,
+    marginTop: 4,
+  },
+  formCard: {
+    margin: cardPadding,
+    padding: cardPadding,
+    gap: 24,
+    
+  },
+  inputGroup: {
+    gap: 8,
+  },
+  label: {
+    fontSize: 16,
+    fontFamily: 'Poppins-Medium',
+    color: colors.text.primary,
+  },
   selector: {
-    backgroundColor: 'white',
-    padding: 16,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#ddd',
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.background.primary,
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: colors.border.primary,
+  },
+  selectorContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
   selectedText: {
     fontSize: 16,
-    color: '#333',
+    fontFamily: 'Poppins-Regular',
+    color: colors.text.primary,
   },
   placeholderText: {
     fontSize: 16,
-    color: '#999',
+    fontFamily: 'Poppins-Regular',
+    color: colors.text.muted,
   },
-  arrow: {
-    fontSize: 12,
-    color: '#666',
+  countContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.background.primary,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border.primary,
+    overflow: 'hidden',
   },
-  input: { backgroundColor: 'white', padding: 16, borderRadius: 8, fontSize: 16, borderWidth: 1, borderColor: '#ddd' },
-  button: { backgroundColor: '#2196F3', padding: 18, borderRadius: 8, marginTop: 24, marginBottom: 40 },
-  buttonText: { color: 'white', fontSize: 16, fontWeight: 'bold', textAlign: 'center' },
+  countButton: {
+    width: 48,
+    height: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.background.secondary,
+  },
+  countInput: {
+    flex: 1,
+    height: 48,
+    textAlign: 'center',
+    fontSize: 18,
+    fontFamily: 'Poppins-Medium',
+    color: colors.text.primary,
+  },
+  buttonContainer: {
+    padding: cardPadding,
+   
+  },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: 'white',
+    backgroundColor: colors.background.primary,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    maxHeight: '70%',
-    paddingBottom: 20,
+    maxHeight: '80%',
   },
   modalHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 20,
+    justifyContent: 'space-between',
+    padding: cardPadding,
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    borderBottomColor: colors.border.primary,
   },
   modalTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
+    fontSize: 20,
+    fontFamily: 'Poppins-SemiBold',
+    color: colors.text.primary,
   },
   modalClose: {
-    fontSize: 24,
-    color: '#666',
+    padding: 8,
   },
   modalItem: {
-    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: cardPadding,
+    gap: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: colors.border.primary,
+  },
+  modalItemIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.brand.primary + '10',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalItemContent: {
+    flex: 1,
+    gap: 4,
   },
   modalItemText: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 4,
+    fontFamily: 'Poppins-Medium',
+    color: colors.text.primary,
   },
   modalItemDetail: {
     fontSize: 14,
-    color: '#666',
+    fontFamily: 'Poppins-Regular',
+    color: colors.text.secondary,
   },
-  emptyText: {
-    textAlign: 'center',
-    color: '#666',
-    padding: 20,
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.background.card,
+    borderWidth: 1,
+    borderColor: colors.border.primary,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginHorizontal: 16,
+    marginVertical: 12,
+    gap: 8,
+  },
+  searchIcon: {
+    marginRight: 4,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    fontFamily: 'Poppins-Regular',
+    color: colors.text.primary,
+    padding: 0,
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.background.primary,
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: colors.border.primary,
+  },
+  inputIcon: {
+    marginRight: 12,
+  },
+  input: {
+    flex: 1,
+    fontSize: 16,
+    fontFamily: 'Poppins-Regular',
+    color: colors.text.primary,
+    padding: 0,
   },
 });

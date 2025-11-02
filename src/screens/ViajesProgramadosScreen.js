@@ -1,53 +1,83 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, Dimensions, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import { viajeService } from '../database/viajeService';
+import colors from '../theme/colors';
+import { Card, ActionButton, StatusBadge } from '../components/common';
 
 const { width: screenWidth } = Dimensions.get('window');
 const cardMargin = Math.max(16, screenWidth * 0.04);
 const cardPadding = Math.max(16, screenWidth * 0.04);
+const REFRESH_INTERVAL = 5000; // 5 segundos
 
 export default function ViajesProgramadosScreen({ navigation }) {
   const [viajes, setViajes] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const unsubscribe = navigation.addListener('focus', loadViajes);
-    return unsubscribe;
-  }, [navigation]);
+  const loadViajes = useCallback(async () => {
+    try {
+      setLoading(true);
+      const data = await viajeService.getByEstado('En proceso');
+      setViajes(data);
+    } catch (error) {
+      console.error('Error cargando viajes:', error);
+      Alert.alert('Error', 'No se pudieron cargar los viajes programados');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-  const loadViajes = async () => {
-    const data = await viajeService.getProgramados();
-    setViajes(data);
+  useFocusEffect(
+    useCallback(() => {
+      loadViajes();
+      const intervalId = setInterval(loadViajes, REFRESH_INTERVAL);
+      return () => clearInterval(intervalId);
+    }, [loadViajes])
+  );
+
+  const handleComplete = async (viajeId) => {
+    try {
+      const viaje = viajes.find(v => v.id === viajeId);
+      if (!viaje) return;
+
+      // Actualizar estado a completado
+      await viajeService.update(viajeId, {
+        ...viaje,
+        estado: 'Completado'
+      });
+
+      loadViajes();
+      Alert.alert('Éxito', 'Viaje marcado como completado');
+    } catch (error) {
+      console.error('Error completando viaje:', error);
+      Alert.alert('Error', 'No se pudo completar el viaje');
+    }
   };
 
-  const toggleEstado = async (id, estadoActual) => {
-    const nuevoEstado = estadoActual === 'En proceso' ? 'Completado' : 'En proceso';
-    await viajeService.updateEstado(id, nuevoEstado);
-    loadViajes();
-  };
-
-  const incrementarViaje = async (viajeId) => {
+  const handleIncrement = async (viajeId) => {
     try {
       await viajeService.incrementarViajeCompletado(viajeId);
       loadViajes();
     } catch (error) {
-      Alert.alert('Error', 'No se pudo incrementar el viaje');
+      Alert.alert('Error', error.message || 'No se pudo incrementar el viaje');
     }
   };
 
-  const decrementarViaje = async (viajeId) => {
+  const handleDecrement = async (viajeId) => {
     try {
       await viajeService.decrementarViajeCompletado(viajeId);
       loadViajes();
     } catch (error) {
-      Alert.alert('Error', 'No se pudo decrementar el viaje');
+      Alert.alert('Error', error.message || 'No se pudo decrementar el viaje');
     }
   };
 
-  const eliminarViaje = (viajeId, camionNombre, destinoNombre) => {
+  const handleDelete = (viajeId, destinoNombre) => {
     Alert.alert(
       'Eliminar Viaje',
-      `¿Eliminar viaje de ${camionNombre} a ${destinoNombre}?`,
+      `¿Estás seguro de eliminar el viaje a ${destinoNombre}?`,
       [
         { text: 'Cancelar', style: 'cancel' },
         {
@@ -57,7 +87,7 @@ export default function ViajesProgramadosScreen({ navigation }) {
             try {
               await viajeService.deleteViaje(viajeId);
               loadViajes();
-              Alert.alert('Éxito', 'Viaje eliminado');
+              Alert.alert('Éxito', 'Viaje eliminado correctamente');
             } catch (error) {
               Alert.alert('Error', 'No se pudo eliminar el viaje');
             }
@@ -67,81 +97,145 @@ export default function ViajesProgramadosScreen({ navigation }) {
     );
   };
 
-  return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Viajes Programados</Text>
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={() => navigation.navigate('AddViaje')}
-        >
-          <Text style={styles.addButtonText}>➕</Text>
-        </TouchableOpacity>
+  const renderViajeCard = ({ item }) => (
+    <Card key={item.id} style={styles.viajeCard}>
+      <View style={styles.viajeHeader}>
+        <View style={styles.viajeTitle}>
+          <MaterialCommunityIcons 
+            name="map-marker" 
+            size={24} 
+            color={colors.brand.secondary} 
+          />
+          <View style={styles.destinoContainer}>
+            <Text style={styles.destino}>{item.destino_nombre}</Text>
+            {item.destino_ubicacion && (
+              <Text style={styles.destinoUbicacion}>{item.destino_ubicacion}</Text>
+            )}
+          </View>
+        </View>
+        <View style={styles.statusContainer}>
+          <StatusBadge status={item.estado} />
+          <TouchableOpacity 
+            onPress={() => handleDelete(item.id, item.destino_nombre)}
+            style={styles.deleteButton}
+          >
+            <MaterialCommunityIcons 
+              name="delete-outline" 
+              size={24} 
+              color={colors.status.error} 
+            />
+          </TouchableOpacity>
+        </View>
       </View>
       
+      {/* Barra de progreso */}
+      <View style={styles.progressContainer}>
+        <View style={styles.progressHeader}>
+          <Text style={styles.progressText}>
+            Progreso: {item.viajes_completados || 0}/{item.cantidad_viajes}
+          </Text>
+          <Text style={styles.progressPercentage}>
+            {Math.round(((item.viajes_completados || 0) / item.cantidad_viajes) * 100)}%
+          </Text>
+        </View>
+        <View style={styles.progressBarBg}>
+          <View 
+            style={[
+              styles.progressBarFill, 
+              { width: `${((item.viajes_completados || 0) / item.cantidad_viajes) * 100}%` }
+            ]} 
+          />
+        </View>
+      </View>
+
+      <View style={styles.viajeInfo}>
+        <MaterialCommunityIcons 
+          name="calendar" 
+          size={20} 
+          color={colors.text.secondary} 
+        />
+        <Text style={styles.viajeInfoText}>{item.fecha_programada}</Text>
+      </View>
+
+      {item.lugar_inicio && (
+        <View style={styles.viajeInfo}>
+          <MaterialCommunityIcons 
+            name="map-marker-radius" 
+            size={20} 
+            color={colors.text.secondary} 
+          />
+          <Text style={styles.viajeInfoText}>Inicio: {item.lugar_inicio}</Text>
+        </View>
+      )}
+
+      {/* Botones de control */}
+      <View style={styles.buttonsContainer}>
+        <TouchableOpacity 
+          style={[
+            styles.controlButton, 
+            styles.decrementButton,
+            (item.viajes_completados || 0) === 0 && styles.disabledButton
+          ]}
+          onPress={() => handleDecrement(item.id)}
+          disabled={(item.viajes_completados || 0) === 0}
+        >
+          <MaterialCommunityIcons name="minus" size={20} color={colors.text.primary} />
+          <Text style={styles.buttonText}>Restar</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity 
+          style={[
+            styles.controlButton, 
+            styles.incrementButton,
+            (item.viajes_completados || 0) >= item.cantidad_viajes && styles.disabledButton
+          ]}
+          onPress={() => handleIncrement(item.id)}
+          disabled={(item.viajes_completados || 0) >= item.cantidad_viajes}
+        >
+          <MaterialCommunityIcons name="plus" size={20} color={colors.text.primary} />
+          <Text style={styles.buttonText}>Entregado</Text>
+        </TouchableOpacity>
+      </View>
+    </Card>
+  );
+
+  return (
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <View style={styles.header}>
+        <View>
+          <Text style={[styles.headerTitle, { fontSize: 24 }, { paddingRight: 10 }]}>Pedidos Programados</Text>
+          <Text style={styles.headerSubtitle}>{viajes.length} pedidos en proceso</Text>
+        </View>
+        <ActionButton
+          icon="plus"
+          variant="primary"
+          onPress={() => navigation.navigate('AddViaje')}
+        />
+      </View>
+
       <FlatList
         data={viajes}
         keyExtractor={(item) => item.id.toString()}
-        renderItem={({ item }) => (
-          <View style={styles.card}>
-            <View style={styles.cardHeader}>
-              <Text style={styles.camion}>🚛 {item.camion_nombre}</Text>
-              <View style={styles.statusContainer}>
-                <Text style={[styles.estado, { color: item.estado === 'Completado' ? '#4CAF50' : '#FF9800' }]}>
-                  {item.estado === 'Completado' ? '✅' : '🟡'}
-                </Text>
-                <TouchableOpacity 
-                  onPress={() => eliminarViaje(item.id, item.camion_nombre, item.destino_nombre)}
-                  style={styles.deleteButton}
-                >
-                  <Text style={styles.deleteButtonText}>🗑️</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-            <Text style={styles.destino}>📍 {item.destino_nombre}</Text>
-            
-            {/* Barra de progreso */}
-            <View style={styles.progressContainer}>
-              <Text style={styles.progressText}>
-                Progreso: {item.viajes_completados || 0}/{item.cantidad_viajes}
-              </Text>
-              <View style={styles.progressBarBg}>
-                <View 
-                  style={[
-                    styles.progressBarFill, 
-                    { width: `${((item.viajes_completados || 0) / item.cantidad_viajes) * 100}%` }
-                  ]} 
-                />
-              </View>
-            </View>
-
-            {/* Botones de control */}
-            <View style={styles.buttonsContainer}>
-              <TouchableOpacity 
-                style={[styles.controlButton, styles.decrementButton]}
-                onPress={() => decrementarViaje(item.id)}
-                disabled={(item.viajes_completados || 0) === 0}
-              >
-                <Text style={styles.buttonText}>− Restar</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={[styles.controlButton, styles.incrementButton]}
-                onPress={() => incrementarViaje(item.id)}
-                disabled={(item.viajes_completados || 0) >= item.cantidad_viajes}
-              >
-                <Text style={styles.buttonText}>+ Entregado</Text>
-              </TouchableOpacity>
-            </View>
-
-            <Text style={styles.info}>📅 {item.fecha_programada}</Text>
-          </View>
-        )}
+        renderItem={renderViajeCard}
+        contentContainerStyle={styles.listContainer}
+        showsVerticalScrollIndicator={false}
         ListEmptyComponent={
-          <View style={styles.empty}>
-            <Text style={styles.emptyText}>📋</Text>
-            <Text style={styles.emptySubtext}>No hay viajes programados</Text>
-          </View>
+          <Card>
+            <View style={styles.emptyContainer}>
+              <MaterialCommunityIcons 
+                name="truck-check" 
+                size={48} 
+                color={colors.text.muted} 
+              />
+              <Text style={styles.emptyText}>No hay pedidos en proceso</Text>
+              <ActionButton
+                icon="plus"
+                label="Programar Pedido"
+                onPress={() => navigation.navigate('AddViaje')}
+                variant="primary"
+              />
+            </View>
+          </Card>
         }
       />
     </SafeAreaView>
@@ -149,50 +243,242 @@ export default function ViajesProgramadosScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f5f5f5' },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: cardPadding, backgroundColor: 'white', borderBottomWidth: 1, borderBottomColor: '#e0e0e0' },
-  title: { fontSize: 20, fontWeight: 'bold', color: '#333' },
-  addButton: { backgroundColor: '#2196F3', padding: 12, borderRadius: 8 },
-  addButtonText: { color: 'white', fontSize: 20 },
-  card: { backgroundColor: 'white', margin: cardMargin, marginBottom: 12, padding: cardPadding, borderRadius: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8, alignItems: 'center' },
-  camion: { fontSize: 18, fontWeight: 'bold', color: '#333' },
-  statusContainer: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  estado: { fontSize: 24 },
-  deleteButton: { padding: 4 },
-  deleteButtonText: { fontSize: 20 },
-  destino: { fontSize: 16, color: '#666', marginBottom: 8 },
-  info: { fontSize: 14, color: '#666', marginTop: 8 },
-  estadoText: { fontSize: 12, fontWeight: '600', marginTop: 8 },
-  empty: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: 60 },
-  emptyText: { fontSize: 64, marginBottom: 16 },
-  emptySubtext: { fontSize: 16, color: '#666' },
-  progressContainer: { marginVertical: 12 },
-  progressText: { fontSize: 14, fontWeight: '600', color: '#333', marginBottom: 8 },
-  progressBarBg: { 
-    height: 10, 
-    backgroundColor: '#E0E0E0', 
-    borderRadius: 5, 
-    overflow: 'hidden' 
+  container: {
+    flex: 1,
+    backgroundColor: colors.background.primary,
   },
-  progressBarFill: { 
-    height: '100%', 
-    backgroundColor: '#4CAF50', 
-    borderRadius: 5 
+  viajeCard: {
+    marginHorizontal: cardMargin,
+    marginBottom: cardMargin,
+    padding: cardPadding,
+    gap: 16,
   },
-  buttonsContainer: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    marginTop: 12,
-    gap: 10 
+  viajeHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
-  controlButton: { 
-    flex: 1, 
-    padding: 12, 
-    borderRadius: 8, 
-    alignItems: 'center' 
+  viajeTitle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
   },
-  incrementButton: { backgroundColor: '#4CAF50' },
-  decrementButton: { backgroundColor: '#FF6F00' },
-  buttonText: { color: 'white', fontWeight: 'bold', fontSize: 14 },
+  destinoContainer: {
+    flex: 1,
+  },
+  destino: {
+    fontSize: 18,
+    fontFamily: 'Poppins-SemiBold',
+    color: colors.text.primary,
+  },
+  destinoUbicacion: {
+    fontSize: 14,
+    fontFamily: 'Poppins-Regular',
+    color: colors.text.secondary,
+    marginTop: 2,
+  },
+  statusContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  deleteButton: {
+    padding: 4,
+  },
+  destinoInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  destinoNombre: {
+    fontSize: 16,
+    fontFamily: 'Poppins-Medium',
+    color: colors.text.secondary,
+  },
+  progressContainer: {
+    gap: 8,
+  },
+  progressHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  progressText: {
+    fontSize: 14,
+    fontFamily: 'Poppins-Medium',
+    color: colors.text.primary,
+  },
+  progressPercentage: {
+    fontSize: 14,
+    fontFamily: 'Poppins-SemiBold',
+    color: colors.brand.primary,
+  },
+  progressBarBg: {
+    height: 8,
+    backgroundColor: colors.background.primary,
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  progressBarFill: {
+    height: '100%',
+    backgroundColor: colors.brand.primary,
+    borderRadius: 4,
+  },
+  viajeInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  viajeInfoText: {
+    fontSize: 14,
+    fontFamily: 'Poppins-Regular',
+    color: colors.text.secondary,
+  },
+  buttonsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 16,
+  },
+  controlButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    gap: 8,
+    flex: 1,
+  },
+  incrementButton: {
+    backgroundColor: colors.brand.primary,
+  },
+  decrementButton: {
+    backgroundColor: colors.brand.secondary,
+  },
+  disabledButton: {
+    opacity: 0.5,
+  },
+  buttonText: {
+    fontSize: 14,
+    fontFamily: 'Poppins-Medium',
+    color: colors.text.primary,
+  },
+  buttonsContainer: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: cardPadding,
+    backgroundColor: colors.background.card,
+  },
+  headerTitle: {
+    fontSize: 28,
+    fontFamily: 'Poppins-SemiBold',
+    color: colors.text.primary,
+    marginBottom: 4,
+  },
+  headerSubtitle: {
+    fontSize: 16,
+    fontFamily: 'Poppins-Regular',
+    color: colors.text.secondary,
+  },
+  listContainer: {
+    padding: cardPadding,
+    gap: cardMargin,
+    paddingBottom: 100,
+  },
+  viajeCard: {
+    gap: 16,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  camionNombre: {
+    fontSize: 18,
+    fontFamily: 'Poppins-SemiBold',
+    color: colors.text.primary,
+  },
+  cardBody: {
+    gap: 16,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  infoItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  infoText: {
+    fontSize: 14,
+    fontFamily: 'Poppins-Regular',
+    color: colors.text.secondary,
+  },
+  completeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    gap: 8,
+    borderRadius: 8,
+    backgroundColor: colors.status.successLight,
+  },
+  completeButtonText: {
+    fontSize: 16,
+    fontFamily: 'Poppins-Medium',
+    color: colors.status.success,
+  },
+  counterContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.background.secondary,
+    padding: 12,
+    borderRadius: 8,
+  },
+  counterButton: {
+    padding: 8,
+  },
+  counterInfo: {
+    alignItems: 'center',
+  },
+  counterNumber: {
+    fontSize: 18,
+    fontFamily: 'Poppins-SemiBold',
+    color: colors.text.primary,
+  },
+  counterLabel: {
+    fontSize: 12,
+    fontFamily: 'Poppins-Regular',
+    color: colors.text.secondary,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    padding: cardPadding,
+    gap: 16,
+  },
+  emptyText: {
+    fontSize: 16,
+    fontFamily: 'Poppins-Regular',
+    color: colors.text.muted,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  statusBadge: {
+    minWidth: 100,
+  },
 });

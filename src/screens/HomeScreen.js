@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,32 +9,34 @@ import {
   ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import { camionService } from '../database/camionService';
 import { viajeService } from '../database/viajeService';
+import { colors } from '../theme/colors';
+import { Card, ActionButton } from '../components/common';
+import { TruckCard } from '../components/cards';
+import { useAuth } from '../context/AuthContext';
 
-const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+const { width: screenWidth } = Dimensions.get('window');
 const isTablet = screenWidth > 768;
-const cardMargin = Math.max(16, screenWidth * 0.04);
 const cardPadding = Math.max(16, screenWidth * 0.04);
+const REFRESH_INTERVAL = 5000; // 5 segundos
 
 export default function HomeScreen({ navigation }) {
+  const { user } = useAuth();
   const [camiones, setCamiones] = useState([]);
-  const [stats, setStats] = useState({ total: 0, enProceso: 0, completados: 0 });
+  const [stats, setStats] = useState({
+    total: 0,
+    enProceso: 0,
+    completados: 0,
+    camionesActivos: 0,
+    viajesSemana: 0
+  });
   const [loading, setLoading] = useState(true);
   const [currentDate, setCurrentDate] = useState('');
 
-  useEffect(() => {
-    // Actualizar fecha
-    updateCurrentDate();
-    
-    const unsubscribe = navigation.addListener('focus', () => {
-      loadData();
-      updateCurrentDate();
-    });
-    return unsubscribe;
-  }, [navigation]);
-
-  const updateCurrentDate = () => {
+  const updateCurrentDate = useCallback(() => {
     const now = new Date();
     const options = { 
       weekday: 'long', 
@@ -44,115 +46,218 @@ export default function HomeScreen({ navigation }) {
     };
     const formattedDate = now.toLocaleDateString('es-ES', options);
     setCurrentDate(formattedDate);
-  };
+  }, []);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
-      const [camionesData, viajesData] = await Promise.all([
+      const [camionesData, statsData] = await Promise.all([
         camionService.getAll(),
-        viajeService.getAll(),
+        viajeService.getStats()
       ]);
       
+      console.log('Estadísticas actualizadas:', statsData); // Debug
+      
       setCamiones(camionesData);
-      
-      const enProceso = viajesData.filter(v => v.estado === 'En proceso').length;
-      const completados = viajesData.filter(v => v.estado === 'Completado').length;
-      
-      setStats({
-        total: viajesData.length,
-        enProceso,
-        completados,
-      });
+      setStats(statsData);
     } catch (error) {
       console.error('Error cargando datos:', error);
+      // Mantener los valores por defecto en caso de error
+      setStats({
+        total: 0,
+        enProceso: 0,
+        completados: 0,
+        camionesActivos: 0,
+        viajesSemana: 0
+      });
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const renderCamionItem = ({ item }) => {
-    return (
-      <TouchableOpacity
-        style={styles.camionCard}
-        onPress={() => navigation.navigate('CamionDetail', { camionId: item.id })}
-      >
-        <View style={styles.camionHeader}>
-          <Text style={styles.camionNombre}>🚛 {item.nombre}</Text>
-          <Text style={styles.camionViajes}>{item.viajes_realizados}</Text>
-        </View>
-        <Text style={styles.camionStats}>
-          Viajes realizados
-        </Text>
-      </TouchableOpacity>
-    );
-  };
+  useFocusEffect(
+    useCallback(() => {
+      // Cargar datos inmediatamente al enfocar la pantalla
+      loadData();
+      updateCurrentDate();
+
+      // Configurar intervalo de actualización
+      const intervalId = setInterval(() => {
+        loadData();
+      }, REFRESH_INTERVAL);
+
+      // Limpiar el intervalo cuando la pantalla pierde el foco
+      return () => {
+        clearInterval(intervalId);
+      };
+    }, [loadData, updateCurrentDate])
+  );
+
+  const renderStatCard = useCallback((icon, number, label, color) => (
+    <Card style={[styles.statCard, { borderLeftWidth: 4, borderLeftColor: color }]}>
+      <MaterialCommunityIcons 
+        name={icon} 
+        size={32} 
+        color={color} 
+      />
+      <View style={styles.statInfo}>
+        <Text style={styles.statNumber}>{number || 0}</Text>
+        <Text style={styles.statLabel}>{label}</Text>
+      </View>
+    </Card>
+  ), []);
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.title}>Gestión de Camiones</Text>
-          <Text style={styles.subtitle}>Panel de Control</Text>
-          <Text style={styles.dateText}>📅 {currentDate}</Text>
-        </View>
-
-        {/* Stats Cards */}
-        <View style={styles.statsContainer}>
-          <View style={styles.statCard}>
-            <Text style={styles.statNumber}>{stats.total}</Text>
-            <Text style={styles.statLabel}>Total Viajes</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={[styles.statNumber, { color: '#FF9800' }]}>{stats.enProceso}</Text>
-            <Text style={styles.statLabel}>En Proceso</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={[styles.statNumber, { color: '#4CAF50' }]}>{stats.completados}</Text>
-            <Text style={styles.statLabel}>Completados</Text>
-          </View>
-        </View>
-
-        {/* Quick Actions */}
-        <View style={styles.actionsContainer}>
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => navigation.navigate('AddViaje')}
-          >
-            <Text style={styles.actionIcon}>➕</Text>
-            <Text style={styles.actionText}>Nuevo Viaje</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => navigation.navigate('CamionList')}
-          >
-            <Text style={styles.actionIcon}>🚛</Text>
-            <Text style={styles.actionText}>Camiones</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => navigation.navigate('DestinoList')}
-          >
-            <Text style={styles.actionIcon}>📍</Text>
-            <Text style={styles.actionText}>Destinos</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Camiones List */}
-        <View style={styles.camionesSection}>
-          <Text style={styles.sectionTitle}>Camiones ({camiones.length})</Text>
-          <FlatList
-            data={camiones}
-            keyExtractor={(item) => item.id.toString()}
-            renderItem={renderCamionItem}
-            scrollEnabled={false}
-            ListEmptyComponent={
-              <Text style={styles.emptyText}>No hay camiones registrados</Text>
-            }
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <FlatList
+        data={camiones}
+        keyExtractor={(item) => item.id.toString()}
+        renderItem={({ item }) => (
+          <TruckCard
+            truck={item}
+            onPress={() => navigation.navigate('CamionDetail', { camionId: item.id })}
           />
-        </View>
-      </ScrollView>
+        )}
+        ListHeaderComponent={
+          <>
+            {/* Header Section */}
+            <View style={styles.header}>
+              <View style={styles.headerContent}>
+                <View style={styles.userGreeting}>
+                  <MaterialCommunityIcons 
+                    name="account-circle" 
+                    size={40} 
+                    color={colors.brand.primary} 
+                  />
+                  <View style={styles.greetingText}>
+                    <Text style={styles.greetingHello}>Hola, 👋</Text>
+                    <Text style={styles.greetingName}>
+                      {user?.displayName || user?.email?.split('@')[0] || 'Usuario'}
+                    </Text>
+                  </View>
+                </View>
+                <Text style={styles.dateSmall}>{currentDate}</Text>
+                <Text style={styles.subtitle}>Gestiona tus viajes y camiones</Text>
+              </View>
+            </View>
+
+            {/* Stats Cards */}
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false} 
+              style={styles.statsScroll}
+              contentContainerStyle={styles.statsContainer}
+            >
+              {renderStatCard(
+                "truck-check",
+                stats.total,
+                "Total Pedidos",
+                colors.brand.primary
+              )}
+              
+              {renderStatCard(
+                "calendar-week",
+                stats.viajesSemana,
+                "Viajes Semana",
+                colors.brand.accent
+              )}
+              
+              {renderStatCard(
+                "truck-delivery",
+                stats.enProceso,
+                "Pedidos En Proceso",
+                colors.brand.secondary
+              )}
+              
+              {renderStatCard(
+                "check-circle",
+                stats.completados,
+                "Pedidos Completados",
+                colors.status.success
+              )}
+            </ScrollView>
+
+            {/* Quick Actions */}
+            <View style={styles.actionsContainer}>
+              <Text style={styles.sectionTitle}>Acciones Rápidas</Text>
+              <View style={styles.actionsGrid}>
+            <ActionButton
+              icon="truck-fast"
+              label="Nuevo Pedido"
+              onPress={() => navigation.navigate('AddViaje')}
+              variant="primary"
+              size="large"
+            />                
+                <ActionButton
+                  icon="truck-plus"
+                  label="Camiones"
+                  onPress={() => navigation.navigate('CamionList')}
+                  variant="secondary"
+                  size="large"
+                />
+
+                <ActionButton
+                  icon="account-group"
+                  label="Dueños"
+                  onPress={() => navigation.navigate('DuenoList')}
+                  variant="secondary"
+                  size="large"
+                />
+
+                <ActionButton
+                  icon="map-marker-plus"
+                  label="Destinos"
+                  onPress={() => navigation.navigate('DestinoList')}
+                  variant="secondary"
+                  size="large"
+                />
+
+                <ActionButton
+                  icon="history"
+                  label="Historial"
+                  onPress={() => navigation.navigate('Historial')}
+                  variant="secondary"
+                  size="large"
+                />
+              </View>
+            </View>
+
+            {/* Active Trucks Section Header */}
+            <View style={styles.camionesHeader}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Camiones Activos</Text>
+                <TouchableOpacity 
+                  style={styles.viewAllButton}
+                  onPress={() => navigation.navigate('CamionList')}
+                >
+                  <MaterialCommunityIcons name="truck-delivery" size={24} color={colors.brand.primary} />
+                  <Text style={styles.viewAllText}>Ver todos</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </>
+        }
+        ListEmptyComponent={
+          <Card>
+            <View style={styles.emptyContainer}>
+              <MaterialCommunityIcons 
+                name="truck-remove" 
+                size={48} 
+                color={colors.text.muted} 
+              />
+              <Text style={styles.emptyText}>No hay camiones registrados</Text>
+              <ActionButton
+                icon="plus"
+                label="Agregar Camión"
+                onPress={() => navigation.navigate('CamionList')}
+                variant="primary"
+              />
+            </View>
+          </Card>
+        }
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.camionesListContent}
+      />
     </SafeAreaView>
   );
 }
@@ -160,134 +265,132 @@ export default function HomeScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: colors.background.primary,
   },
   header: {
-    backgroundColor: '#2196F3',
-    padding: cardPadding + 4,
-    paddingBottom: cardPadding + 8,
+    padding: cardPadding,
+    paddingBottom: cardPadding * 1.5,
   },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: 'white',
-    marginBottom: 4,
+  headerContent: {
+    gap: 4,
+  },
+  userGreeting: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 12,
+  },
+  greetingText: {
+    flex: 1,
+  },
+  greetingHello: {
+    fontSize: 16,
+    fontFamily: 'Poppins-Regular',
+    color: colors.text.secondary,
+  },
+  greetingName: {
+    fontSize: 24,
+    fontFamily: 'Poppins-SemiBold',
+    color: colors.text.primary,
+  },
+  dateSmall: {
+    fontSize: 14,
+    fontFamily: 'Poppins-Regular',
+    color: colors.brand.secondary,
+    textTransform: 'capitalize',
+  },
+  welcome: {
+    fontSize: 32,
+    fontFamily: 'Poppins-SemiBold',
+    color: colors.text.primary,
   },
   subtitle: {
     fontSize: 16,
-    color: '#E3F2FD',
+    fontFamily: 'Poppins-Regular',
+    color: colors.text.secondary,
   },
-  dateText: {
-    fontSize: 14,
-    color: '#E3F2FD',
-    marginTop: 8,
-    fontWeight: '500',
+  statsScroll: {
+    marginBottom: cardPadding,
   },
   statsContainer: {
-    flexDirection: 'row',
-    backgroundColor: 'white',
-    marginTop: -20,
-    marginHorizontal: cardMargin,
-    borderRadius: 12,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    paddingHorizontal: cardPadding,
+    gap: cardPadding,
+    paddingBottom: 100,
   },
   statCard: {
-    flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 16,
+    padding: 20,
+    width: screenWidth * 0.75,
+    maxWidth: 300,
+  },
+  statInfo: {
+    gap: 4,
   },
   statNumber: {
     fontSize: 24,
-    fontWeight: 'bold',
-    color: '#2196F3',
+    fontFamily: 'Poppins-SemiBold',
+    color: colors.text.primary,
   },
   statLabel: {
-    fontSize: 12,
-    color: '#666',
-    marginTop: 4,
+    fontSize: 14,
+    fontFamily: 'Poppins-Regular',
+    color: colors.text.secondary,
   },
   actionsContainer: {
+    padding: cardPadding,
+    gap: 16,
+  },
+  actionsGrid: {
     flexDirection: 'row',
-    marginHorizontal: cardMargin,
-    marginTop: 20,
+    flexWrap: 'wrap',
     gap: 12,
-  },
-  actionButton: {
-    flex: 1,
-    backgroundColor: 'white',
-    padding: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  actionIcon: {
-    fontSize: 32,
-    marginBottom: 8,
-  },
-  actionText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
-  },
-  camionesSection: {
-    margin: cardMargin,
-    marginTop: 24,
+    justifyContent: isTablet ? 'flex-start' : 'space-between',
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
+    fontSize: 20,
+    fontFamily: 'Poppins-SemiBold',
+    color: colors.text.primary,
     marginBottom: 12,
   },
-  camionCard: {
-    backgroundColor: 'white',
-    padding: cardPadding,
-    borderRadius: 12,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+  camionesHeader: {
+    paddingHorizontal: cardPadding,
+    paddingTop: cardPadding,
   },
-  camionHeader: {
+  sectionHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    justifyContent: 'space-between',
+    marginBottom: 16,
   },
-  camionNombre: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
+  viewAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: 8,
   },
-  camionNombre: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
-    flex: 1,
+  viewAllText: {
+    fontSize: 14,
+    fontFamily: 'Poppins-Medium',
+    color: colors.brand.primary,
   },
-  camionViajes: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#2196F3',
-  },
-  camionStats: {
-    fontSize: 12,
-    color: '#666',
-    textAlign: 'right',
+  emptyContainer: {
+    alignItems: 'center',
+    padding: cardPadding,
+    gap: 16,
+    marginHorizontal: cardPadding,
   },
   emptyText: {
+    fontSize: 16,
+    fontFamily: 'Poppins-Regular',
+    color: colors.text.muted,
     textAlign: 'center',
-    color: '#666',
-    padding: 20,
+    marginBottom: 8,
+  },
+  camionesListContent: {
+    paddingHorizontal: cardPadding,
+    gap: 12,
+    paddingBottom: 100,
   },
 });

@@ -3,15 +3,18 @@ import {
   View,
   Text,
   StyleSheet,
-  FlatList,
   TouchableOpacity,
   Alert,
   Dimensions,
   ScrollView,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { camionService } from '../database/camionService';
 import { viajeService } from '../database/viajeService';
+import { colors } from '../theme/colors';
+import { Card, ActionButton, StatusBadge } from '../components/common';
 
 const { width: screenWidth } = Dimensions.get('window');
 const cardMargin = Math.max(16, screenWidth * 0.04);
@@ -82,79 +85,181 @@ export default function CamionDetailScreen({ route, navigation }) {
     );
   };
 
-  if (!camion) return <View style={styles.loading}><Text>Cargando...</Text></View>;
+  if (!camion) {
+    return (
+      <View style={styles.loading}>
+        <ActivityIndicator size="large" color={colors.brand.primary} />
+        <Text style={styles.loadingText}>Cargando detalles...</Text>
+      </View>
+    );
+  }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+      <ScrollView 
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
         <View style={styles.header}>
-          <Text style={styles.title}>🚛 {camion.nombre}</Text>
-          <Text style={styles.stats}>{camion.viajes_realizados} viajes realizados</Text>
-        </View>
-
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={() => navigation.navigate('AddViaje', { preselectedCamionId: camionId })}
-        >
-          <Text style={styles.addButtonText}>➕ Agregar Viaje</Text>
-        </TouchableOpacity>
-
-        <View style={styles.viajes}>
-          <Text style={styles.sectionTitle}>Viajes ({viajes.length})</Text>
-          {viajes.map((viaje) => (
-            <View key={viaje.id} style={styles.viajeCard}>
-              <View style={styles.viajeHeader}>
-                <Text style={styles.destino}>📍 {viaje.destino_nombre}</Text>
-                <View style={styles.statusContainer}>
-                  <Text style={[styles.estado, { color: viaje.estado === 'Completado' ? '#4CAF50' : '#FF9800' }]}>
-                    {viaje.estado === 'Completado' ? '✅' : '🟡'}
-                  </Text>
-                  <TouchableOpacity 
-                    onPress={() => eliminarViaje(viaje.id, viaje.destino_nombre)}
-                    style={styles.deleteButton}
-                  >
-                    <Text style={styles.deleteButtonText}>🗑️</Text>
-                  </TouchableOpacity>
-                </View>
+          <View style={styles.headerContent}>
+            <View style={styles.headerTop}>
+              <MaterialCommunityIcons 
+                name="truck" 
+                size={32} 
+                color={colors.text.primary} 
+              />
+              <View style={styles.titleContainer}>
+                <Text style={styles.title}>{camion.nombre}</Text>
+                {camion.dueno && camion.dueno.trim() !== '' && (
+                  <Text style={styles.ownerSubtitle}>Dueño: {camion.dueno}</Text>
+                )}
+              </View>
+            </View>
+            
+            <View style={styles.statsRow}>
+              <View style={styles.statItem}>
+                <MaterialCommunityIcons 
+                  name="routes" 
+                  size={20} 
+                  color={colors.brand.secondary} 
+                />
+                <Text style={styles.stats}>{camion.viajes_realizados} viajes realizados</Text>
               </View>
               
-              {/* Barra de progreso */}
-              <View style={styles.progressContainer}>
-                <Text style={styles.progressText}>
-                  Progreso: {viaje.viajes_completados || 0}/{viaje.cantidad_viajes}
-                </Text>
-                <View style={styles.progressBarBg}>
-                  <View 
-                    style={[
-                      styles.progressBarFill, 
-                      { width: `${((viaje.viajes_completados || 0) / viaje.cantidad_viajes) * 100}%` }
-                    ]} 
-                  />
-                </View>
-              </View>
-
-              {/* Botones de control */}
-              <View style={styles.buttonsContainer}>
-                <TouchableOpacity 
-                  style={[styles.controlButton, styles.decrementButton]}
-                  onPress={() => decrementarViaje(viaje.id)}
-                  disabled={(viaje.viajes_completados || 0) === 0}
-                >
-                  <Text style={styles.buttonText}>− Restar</Text>
-                </TouchableOpacity>
-                
-                <TouchableOpacity 
-                  style={[styles.controlButton, styles.incrementButton]}
-                  onPress={() => incrementarViaje(viaje.id)}
-                  disabled={(viaje.viajes_completados || 0) >= viaje.cantidad_viajes}
-                >
-                  <Text style={styles.buttonText}>+ Entregado</Text>
-                </TouchableOpacity>
-              </View>
-
-              <Text style={styles.viajeInfo}>Fecha: {viaje.fecha_programada}</Text>
             </View>
-          ))}
+          </View>
+        </View>
+
+        <View style={styles.content}>
+          <ActionButton
+            icon="plus"
+            label="Programar Nuevo Pedido"
+            onPress={() => navigation.navigate('AddViaje', { preselectedCamionId: camionId })}
+            variant="primary"
+            size="large"
+          />
+
+          <View style={styles.viajesSection}>
+            <Text style={styles.sectionTitle}>Pedidos Programados ({viajes.length})</Text>
+            {viajes.map((viaje) => (
+              <Card key={viaje.id} style={styles.viajeCard}>
+                <View style={styles.viajeHeader}>
+                  <View style={styles.viajeTitle}>
+                    <MaterialCommunityIcons 
+                      name="map-marker" 
+                      size={24} 
+                      color={colors.brand.secondary} 
+                    />
+                    <View style={styles.destinoContainer}>
+                      <Text style={styles.destino}>{viaje.destino_nombre}</Text>
+                      {viaje.destino_ubicacion && (
+                        <Text style={styles.destinoUbicacion}>{viaje.destino_ubicacion}</Text>
+                      )}
+                    </View>
+                  </View>
+                  <View style={styles.statusContainer}>
+                    <StatusBadge status={viaje.estado} />
+                    <TouchableOpacity 
+                      onPress={() => eliminarViaje(viaje.id, viaje.destino_nombre)}
+                      style={styles.deleteButton}
+                    >
+                      <MaterialCommunityIcons 
+                        name="delete-outline" 
+                        size={24} 
+                        color={colors.status.error} 
+                      />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+                
+                {/* Barra de progreso */}
+                <View style={styles.progressContainer}>
+                  <View style={styles.progressHeader}>
+                    <Text style={styles.progressText}>
+                      Progreso: {viaje.viajes_completados || 0}/{viaje.cantidad_viajes}
+                    </Text>
+                    <Text style={styles.progressPercentage}>
+                      {Math.round(((viaje.viajes_completados || 0) / viaje.cantidad_viajes) * 100)}%
+                    </Text>
+                  </View>
+                  <View style={styles.progressBarBg}>
+                    <View 
+                      style={[
+                        styles.progressBarFill, 
+                        { width: `${((viaje.viajes_completados || 0) / viaje.cantidad_viajes) * 100}%` }
+                      ]} 
+                    />
+                  </View>
+                </View>
+
+                <View style={styles.viajeInfo}>
+                  <MaterialCommunityIcons 
+                    name="calendar" 
+                    size={20} 
+                    color={colors.text.secondary} 
+                  />
+                  <Text style={styles.viajeInfoText}>{viaje.fecha_programada}</Text>
+                </View>
+
+                {viaje.lugar_inicio && (
+                  <View style={styles.viajeInfo}>
+                    <MaterialCommunityIcons 
+                      name="map-marker-radius" 
+                      size={20} 
+                      color={colors.text.secondary} 
+                    />
+                    <Text style={styles.viajeInfoText}>Inicio: {viaje.lugar_inicio}</Text>
+                  </View>
+                )}
+
+                {/* Botones de control */}
+                <View style={styles.buttonsContainer}>
+                  <TouchableOpacity 
+                    style={[
+                      styles.controlButton, 
+                      styles.decrementButton,
+                      (viaje.viajes_completados || 0) === 0 && styles.disabledButton
+                    ]}
+                    onPress={() => decrementarViaje(viaje.id)}
+                    disabled={(viaje.viajes_completados || 0) === 0}
+                  >
+                    <MaterialCommunityIcons name="minus" size={20} color={colors.text.primary} />
+                    <Text style={styles.buttonText}>Restar</Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity 
+                    style={[
+                      styles.controlButton, 
+                      styles.incrementButton,
+                      (viaje.viajes_completados || 0) >= viaje.cantidad_viajes && styles.disabledButton
+                    ]}
+                    onPress={() => incrementarViaje(viaje.id)}
+                    disabled={(viaje.viajes_completados || 0) >= viaje.cantidad_viajes}
+                  >
+                    <MaterialCommunityIcons name="plus" size={20} color={colors.text.primary} />
+                    <Text style={styles.buttonText}>Entregado</Text>
+                  </TouchableOpacity>
+                </View>
+              </Card>
+            ))}
+            
+            {viajes.length === 0 && (
+              <View style={styles.emptyContainer}>
+                <MaterialCommunityIcons 
+                  name="calendar-blank" 
+                  size={48} 
+                  color={colors.text.muted} 
+                />
+                <Text style={styles.emptyText}>No hay pedidos programados</Text>
+                <ActionButton
+                  icon="plus"
+                  label="Programar Pedido"
+                  onPress={() => navigation.navigate('AddViaje', { preselectedCamionId: camionId })}
+                  variant="primary"
+                />
+              </View>
+            )}
+          </View>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -162,49 +267,212 @@ export default function CamionDetailScreen({ route, navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f5f5f5' },
-  loading: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  header: { backgroundColor: '#2196F3', padding: cardPadding + 4 },
-  title: { fontSize: 24, fontWeight: 'bold', color: 'white', marginBottom: 8 },
-  stats: { fontSize: 18, color: '#E3F2FD', fontWeight: '600' },
-  addButton: { backgroundColor: '#4CAF50', margin: cardMargin, padding: 16, borderRadius: 8 },
-  addButtonText: { color: 'white', fontSize: 16, fontWeight: 'bold', textAlign: 'center' },
-  viajes: { margin: cardMargin },
-  sectionTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 12, color: '#333' },
-  viajeCard: { backgroundColor: 'white', padding: cardPadding, borderRadius: 12, marginBottom: 12 },
-  viajeHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
-  destino: { fontSize: 16, fontWeight: 'bold', color: '#333' },
-  statusContainer: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  estado: { fontSize: 20 },
-  deleteButton: { padding: 4 },
-  deleteButtonText: { fontSize: 20 },
-  viajeInfo: { fontSize: 14, color: '#666', marginTop: 4 },
-  progressContainer: { marginVertical: 12 },
-  progressText: { fontSize: 14, fontWeight: '600', color: '#333', marginBottom: 8 },
+  container: { 
+    flex: 1, 
+    backgroundColor: colors.background.primary,
+  },
+  scrollContent: {
+    paddingBottom: 100,
+  },
+  loading: { 
+    flex: 1, 
+    justifyContent: 'center', 
+    alignItems: 'center',
+    backgroundColor: colors.background.primary,
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    fontFamily: 'Poppins-Regular',
+    color: colors.text.secondary,
+  },
+  header: { 
+    backgroundColor: colors.background.card,
+    padding: cardPadding,
+  },
+  headerContent: {
+    gap: 16,
+  },
+  headerTop: { 
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  titleContainer: {
+    flex: 1,
+  },
+  title: {
+    fontSize: 28,
+    fontFamily: 'Poppins-SemiBold',
+    color: colors.text.primary,
+  },
+  ownerSubtitle: {
+    fontSize: 16,
+    fontFamily: 'Poppins-Regular',
+    color: colors.text.secondary,
+    marginTop: 4,
+  },
+  infoSection: {
+    gap: 8,
+    paddingVertical: 8,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  infoLabel: {
+    fontSize: 15,
+    fontFamily: 'Poppins-Medium',
+    color: colors.text.secondary,
+  },
+  infoText: {
+    fontSize: 15,
+    fontFamily: 'Poppins-Regular',
+    color: colors.text.primary,
+    flex: 1,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  statItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  stats: { 
+    fontSize: 16,
+    fontFamily: 'Poppins-Medium',
+    color: colors.text.secondary,
+  },
+  content: {
+    padding: cardPadding,
+    gap: cardPadding,
+  },
+  viajesSection: {
+    gap: 12,
+    marginTop: 8,
+  },
+  sectionTitle: { 
+    fontSize: 20,
+    fontFamily: 'Poppins-SemiBold',
+    color: colors.text.primary,
+    marginBottom: 4,
+  },
+  viajeCard: { 
+    gap: 16,
+  },
+  viajeHeader: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  viajeTitle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+  },
+  destinoContainer: {
+    flex: 1,
+  },
+  destino: { 
+    fontSize: 18,
+    fontFamily: 'Poppins-SemiBold',
+    color: colors.text.primary,
+  },
+  destinoUbicacion: {
+    fontSize: 14,
+    fontFamily: 'Poppins-Regular',
+    color: colors.text.secondary,
+    marginTop: 2,
+  },
+  statusContainer: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    gap: 12,
+  },
+  deleteButton: {
+    padding: 4,
+  },
+  viajeInfo: { 
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  viajeInfoText: {
+    fontSize: 14,
+    fontFamily: 'Poppins-Regular',
+    color: colors.text.secondary,
+  },
+  progressContainer: { 
+    gap: 8,
+  },
+  progressHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  progressText: { 
+    fontSize: 14,
+    fontFamily: 'Poppins-Medium',
+    color: colors.text.primary,
+  },
+  progressPercentage: {
+    fontSize: 14,
+    fontFamily: 'Poppins-SemiBold',
+    color: colors.brand.primary,
+  },
   progressBarBg: { 
-    height: 10, 
-    backgroundColor: '#E0E0E0', 
-    borderRadius: 5, 
-    overflow: 'hidden' 
+    height: 8,
+    backgroundColor: colors.background.primary,
+    borderRadius: 4,
+    overflow: 'hidden',
   },
   progressBarFill: { 
-    height: '100%', 
-    backgroundColor: '#4CAF50', 
-    borderRadius: 5 
+    height: '100%',
+    backgroundColor: colors.brand.primary,
+    borderRadius: 4,
   },
   buttonsContainer: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    marginTop: 12,
-    gap: 10 
+    flexDirection: 'row',
+    gap: 12,
   },
   controlButton: { 
-    flex: 1, 
-    padding: 12, 
-    borderRadius: 8, 
-    alignItems: 'center' 
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+    borderRadius: 8,
+    gap: 8,
   },
-  incrementButton: { backgroundColor: '#4CAF50' },
-  decrementButton: { backgroundColor: '#FF6F00' },
-  buttonText: { color: 'white', fontWeight: 'bold', fontSize: 14 },
+  incrementButton: { 
+    backgroundColor: colors.brand.primary,
+  },
+  decrementButton: { 
+    backgroundColor: colors.brand.secondary,
+  },
+  disabledButton: {
+    opacity: 0.5,
+  },
+  buttonText: { 
+    color: colors.text.primary,
+    fontFamily: 'Poppins-Medium',
+    fontSize: 14,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    padding: cardPadding * 2,
+    gap: 16,
+  },
+  emptyText: {
+    fontSize: 16,
+    fontFamily: 'Poppins-Regular',
+    color: colors.text.muted,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
 });

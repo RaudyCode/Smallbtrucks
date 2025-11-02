@@ -8,10 +8,15 @@ export const camionService = {
         SELECT 
           c.id,
           c.nombre,
+          c.placa,
+          c.dueno,
+          c.dueno_id,
+          d.nombre as dueno_nombre,
           COALESCE(SUM(v.viajes_completados), 0) as viajes_realizados
         FROM Camion c
         LEFT JOIN Viaje v ON c.id = v.camion_id
-        GROUP BY c.id, c.nombre
+        LEFT JOIN Dueno d ON c.dueno_id = d.id
+        GROUP BY c.id, c.nombre, c.placa, c.dueno, c.dueno_id, d.nombre
         ORDER BY c.id DESC
       `);
       return camiones;
@@ -28,11 +33,16 @@ export const camionService = {
         SELECT 
           c.id,
           c.nombre,
+          c.placa,
+          c.dueno,
+          c.dueno_id,
+          d.nombre as dueno_nombre,
           COALESCE(SUM(v.viajes_completados), 0) as viajes_realizados
         FROM Camion c
         LEFT JOIN Viaje v ON c.id = v.camion_id
+        LEFT JOIN Dueno d ON c.dueno_id = d.id
         WHERE c.id = ?
-        GROUP BY c.id, c.nombre
+        GROUP BY c.id, c.nombre, c.placa, c.dueno, c.dueno_id, d.nombre
       `, [id]);
       return camion;
     } catch (error) {
@@ -42,11 +52,11 @@ export const camionService = {
   },
 
   // Crear un nuevo camión
-  create: async (nombre) => {
+  create: async (nombre, placa = null, dueno = null, duenoId = null) => {
     try {
       const result = await db.runAsync(
-        'INSERT INTO Camion (nombre) VALUES (?)',
-        [nombre]
+        'INSERT INTO Camion (nombre, placa, dueno, dueno_id) VALUES (?, ?, ?, ?)',
+        [nombre, placa, dueno, duenoId]
       );
       return result.lastInsertRowId;
     } catch (error) {
@@ -56,11 +66,11 @@ export const camionService = {
   },
 
   // Actualizar un camión
-  update: async (id, nombre) => {
+  update: async (id, nombre, placa = null, dueno = null, duenoId = null) => {
     try {
       await db.runAsync(
-        'UPDATE Camion SET nombre = ? WHERE id = ?',
-        [nombre, id]
+        'UPDATE Camion SET nombre = ?, placa = ?, dueno = ?, dueno_id = ? WHERE id = ?',
+        [nombre, placa, dueno, duenoId, id]
       );
       return true;
     } catch (error) {

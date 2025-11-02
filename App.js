@@ -3,85 +3,128 @@ import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { NavigationContainer } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
+import {
+  useFonts,
+  Poppins_400Regular,
+  Poppins_500Medium,
+  Poppins_600SemiBold,
+  Poppins_700Bold,
+} from '@expo-google-fonts/poppins';
 
 import AppNavigator from './src/navigation/AppNavigator';
-import { initDatabase } from './src/database/database';
+import { AuthProvider } from './src/context/AuthContext';
+import { migrateDatabase } from './src/database/migration';
+import { colors } from './src/theme/colors';
 
 export default function App() {
-  const [isLoading, setIsLoading] = useState(true);
+  const [isDBReady, setIsDBReady] = useState(false);
   const [error, setError] = useState(null);
+  
+  const [fontsLoaded] = useFonts({
+    'Poppins-Regular': Poppins_400Regular,
+    'Poppins-Medium': Poppins_500Medium,
+    'Poppins-SemiBold': Poppins_600SemiBold,
+    'Poppins-Bold': Poppins_700Bold,
+  });
 
   useEffect(() => {
-    initializeApp();
+    initializeDB();
   }, []);
 
-  const initializeApp = async () => {
+  const initializeDB = async () => {
     try {
-      await initDatabase();
-      console.log('App inicializada correctamente');
-      setIsLoading(false);
+      const success = await migrateDatabase();
+      if (success) {
+        console.log('Base de datos inicializada y migrada correctamente');
+        setIsDBReady(true);
+      } else {
+        throw new Error('Error en la migración de la base de datos');
+      }
     } catch (err) {
       console.error('Error inicializando app:', err);
       setError(err.message);
-      setIsLoading(false);
     }
   };
 
-  if (isLoading) {
+  if (!fontsLoaded || !isDBReady) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#2196F3" />
-        <Text style={styles.loadingText}>Inicializando aplicación...</Text>
+      <View style={styles.centered}>
+        <ActivityIndicator size="large" color={colors.brand.primary} />
+        <Text style={[styles.loadingText, { fontFamily: 'system' }]}>Cargando SmallBtrucks...</Text>
       </View>
     );
   }
 
   if (error) {
     return (
-      <View style={styles.errorContainer}>
-        <Text style={styles.errorText}>Error al inicializar:</Text>
-        <Text style={styles.errorDetail}>{error}</Text>
+      <View style={styles.centered}>
+        <Text style={styles.errorText}>Error: {error}</Text>
       </View>
     );
   }
 
   return (
     <SafeAreaProvider>
-      <NavigationContainer>
-        <AppNavigator />
-        <StatusBar style="light" />
+      <StatusBar style="light" />
+      <NavigationContainer
+        theme={{
+          dark: true,
+          colors: {
+            primary: colors.brand.primary,
+            background: colors.background.primary,
+            card: colors.background.card,
+            text: colors.text.primary,
+            border: colors.background.surface,
+            notification: colors.brand.secondary,
+          },
+        }}
+      >
+        <AuthProvider>
+          <AppNavigator />
+        </AuthProvider>
       </NavigationContainer>
     </SafeAreaProvider>
   );
 }
 
 const styles = StyleSheet.create({
-  loadingContainer: {
+  centered: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f5f5f5',
+    backgroundColor: colors.background.primary,
+    padding: 20,
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 18,
+    color: colors.text.primary,
+    fontFamily: 'Poppins-Medium',
+  },
+  errorText: {
+    fontSize: 16,
+    color: colors.status.error,
+    fontFamily: 'Poppins-Regular',
+    textAlign: 'center',
+    backgroundColor: colors.background.primary,
   },
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: '#666',
-  },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-    backgroundColor: '#f5f5f5',
+    color: colors.text.primary,
+    fontFamily: 'Poppins-Medium',
   },
   errorText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#F44336',
-    marginBottom: 8,
+    fontSize: 16,
+    color: colors.status.error,
+    fontFamily: 'Poppins-Medium',
+    textAlign: 'center',
+    marginHorizontal: 32,
   },
   errorDetail: {
     fontSize: 14,
+    color: colors.text.secondary,
+    fontFamily: 'Poppins-Regular',
     color: '#666',
     textAlign: 'center',
   },

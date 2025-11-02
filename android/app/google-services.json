@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "687559260753",
+    "project_id": "smallbtrucks-a2673",
+    "storage_bucket": "smallbtrucks-a2673.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:687559260753:android:63c2e5d8c845829b60d670",
+        "android_client_info": {
+          "package_name": "com.raudy.camionapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD7M_wxF0MFd6HwYKOtnC7EacbuzGvSYKQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

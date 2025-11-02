@@ -1,10 +1,16 @@
 {
   "expo": {
-    "name": "Camiones Mobile",
-    "slug": "camiones-mobile",
+    "name": "SmallBtrucks",
+    "slug": "small-btrucks",
     "version": "1.0.0",
+    "scheme": "com.smallbtrucks.app",
+    "icon": "./assets/icon.png",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
+    "androidStatusBar": {
+      "translucent": false,
+      "backgroundColor": "#000000"
+    },
     "splash": {
       "resizeMode": "contain",
       "backgroundColor": "#2196F3"
@@ -14,14 +20,16 @@
       "bundleIdentifier": "com.camionesmobile.app"
     },
     "android": {
+      "package": "com.raudy.camionapp",
       "adaptiveIcon": {
-        "backgroundColor": "#2196F3"
-      },
-      "package": "com.camionesmobile.app"
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#ffffff"
+      }
+     
     },
     "extra": {
       "eas": {
-        "projectId": "4e479326-a3ff-4c41-a9e1-66c889eb80dd"
+        "projectId": "325db8a0-13b5-4617-a471-d161bcec98cd"
       }
     }
   }
