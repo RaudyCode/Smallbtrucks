@@ -19,7 +19,6 @@ export default function AddViajeScreen({ route, navigation }) {
   const [destinos, setDestinos] = useState([]);
   const [selectedCamion, setSelectedCamion] = useState(null);
   const [selectedDestino, setSelectedDestino] = useState(null);
-  const [cantidadViajes, setCantidadViajes] = useState('');
   const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0]);
   const [showCamionModal, setShowCamionModal] = useState(false);
   const [showDestinoModal, setShowDestinoModal] = useState(false);
@@ -71,7 +70,7 @@ export default function AddViajeScreen({ route, navigation }) {
   });
 
   const handleSubmit = async () => {
-    if (!selectedCamion || !selectedDestino || !cantidadViajes) {
+    if (!selectedCamion || !selectedDestino) {
       Alert.alert('Error', 'Completa todos los campos obligatorios');
       return;
     }
@@ -85,12 +84,12 @@ export default function AddViajeScreen({ route, navigation }) {
       await viajeService.create(
         selectedCamion.id, 
         selectedDestino.id, 
-        parseInt(cantidadViajes), 
+        0, // Siempre empezar con 0 viajes
         fecha,
         startLocation.trim()
       );
       
-      Alert.alert('Éxito', 'Pedido registrado correctamente', [
+      Alert.alert('Éxito', 'Pedido creado correctamente. Puedes agregar entregas cuando se realicen los viajes.', [
         { 
           text: 'OK', 
           onPress: () => {
@@ -204,35 +203,6 @@ export default function AddViajeScreen({ route, navigation }) {
                   />
                 </TouchableOpacity>
               </View>
-
-              {/* Cantidad de Viajes */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Cantidad de Viajes del Pedido</Text>
-                <View style={styles.countContainer}>
-                  <TouchableOpacity
-                    style={styles.countButton}
-                    onPress={() => setCantidadViajes(Math.max(1, parseInt(cantidadViajes || "0") - 1).toString())}
-                  >
-                    <MaterialCommunityIcons name="minus" size={24} color={colors.text.primary} />
-                  </TouchableOpacity>
-                  <TextInput
-                    style={styles.countInput}
-                    value={cantidadViajes}
-                    onChangeText={setCantidadViajes}
-                    keyboardType="number-pad"
-                    placeholder="0"
-                    placeholderTextColor={colors.text.muted}
-                  />
-                  <TouchableOpacity
-                    style={styles.countButton}
-                    onPress={() => setCantidadViajes((parseInt(cantidadViajes || "0") + 1).toString())}
-                  >
-                    <MaterialCommunityIcons name="plus" size={24} color={colors.text.primary} />
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-
 
               {/* Fecha */}
               <View style={styles.inputGroup}>
@@ -565,30 +535,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: 'Poppins-Regular',
     color: colors.text.muted,
-  },
-  countContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.background.primary,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border.primary,
-    overflow: 'hidden',
-  },
-  countButton: {
-    width: 48,
-    height: 48,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.background.secondary,
-  },
-  countInput: {
-    flex: 1,
-    height: 48,
-    textAlign: 'center',
-    fontSize: 18,
-    fontFamily: 'Poppins-Medium',
-    color: colors.text.primary,
   },
   buttonContainer: {
     padding: cardPadding,

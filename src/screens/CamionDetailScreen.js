@@ -85,6 +85,29 @@ export default function CamionDetailScreen({ route, navigation }) {
     );
   };
 
+  const marcarCompletado = (viajeId, destinoNombre) => {
+    Alert.alert(
+      'Marcar como Completado',
+      `¿Estás seguro de marcar como completado el pedido a ${destinoNombre}? No podrás agregar más entregas.`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Completar',
+          style: 'default',
+          onPress: async () => {
+            try {
+              await viajeService.marcarComoCompletado(viajeId);
+              loadData();
+              Alert.alert('Éxito', 'Pedido marcado como completado');
+            } catch (error) {
+              Alert.alert('Error', error.message || 'No se pudo completar el pedido');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   if (!camion) {
     return (
       <View style={styles.loading}>
@@ -172,22 +195,15 @@ export default function CamionDetailScreen({ route, navigation }) {
                   </View>
                 </View>
                 
-                {/* Barra de progreso */}
+                {/* Información de viajes */}
                 <View style={styles.progressContainer}>
                   <View style={styles.progressHeader}>
                     <Text style={styles.progressText}>
-                      Progreso: {viaje.viajes_completados || 0}/{viaje.cantidad_viajes}
+                      Viajes realizados: {viaje.viajes_completados || 0}
                     </Text>
-                    <Text style={styles.progressPercentage}>
-                      {Math.round(((viaje.viajes_completados || 0) / viaje.cantidad_viajes) * 100)}%
-                    </Text>
-                  </View>
-                  <View style={styles.progressBarBg}>
-                    <View 
-                      style={[
-                        styles.progressBarFill, 
-                        { width: `${((viaje.viajes_completados || 0) / viaje.cantidad_viajes) * 100}%` }
-                      ]} 
+                    <StatusBadge 
+                      status={viaje.estado} 
+                      style={styles.statusBadge}
                     />
                   </View>
                 </View>
@@ -218,10 +234,10 @@ export default function CamionDetailScreen({ route, navigation }) {
                     style={[
                       styles.controlButton, 
                       styles.decrementButton,
-                      (viaje.viajes_completados || 0) === 0 && styles.disabledButton
+                      ((viaje.viajes_completados || 0) === 0 || viaje.estado === 'Completado') && styles.disabledButton
                     ]}
                     onPress={() => decrementarViaje(viaje.id)}
-                    disabled={(viaje.viajes_completados || 0) === 0}
+                    disabled={(viaje.viajes_completados || 0) === 0 || viaje.estado === 'Completado'}
                   >
                     <MaterialCommunityIcons name="minus" size={20} color={colors.text.primary} />
                     <Text style={styles.buttonText}>Restar</Text>
@@ -231,14 +247,27 @@ export default function CamionDetailScreen({ route, navigation }) {
                     style={[
                       styles.controlButton, 
                       styles.incrementButton,
-                      (viaje.viajes_completados || 0) >= viaje.cantidad_viajes && styles.disabledButton
+                      viaje.estado === 'Completado' && styles.disabledButton
                     ]}
                     onPress={() => incrementarViaje(viaje.id)}
-                    disabled={(viaje.viajes_completados || 0) >= viaje.cantidad_viajes}
+                    disabled={viaje.estado === 'Completado'}
                   >
                     <MaterialCommunityIcons name="plus" size={20} color={colors.text.primary} />
                     <Text style={styles.buttonText}>Entregado</Text>
                   </TouchableOpacity>
+                  
+                  {viaje.estado !== 'Completado' && (
+                    <TouchableOpacity 
+                      style={[
+                        styles.controlButton, 
+                        styles.completeButton
+                      ]}
+                      onPress={() => marcarCompletado(viaje.id, viaje.destino_nombre)}
+                    >
+                      <MaterialCommunityIcons name="check-circle" size={20} color={colors.text.primary} />
+                      <Text style={styles.buttonText}>Completar</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
               </Card>
             ))}
@@ -455,13 +484,16 @@ const styles = StyleSheet.create({
   decrementButton: { 
     backgroundColor: colors.brand.secondary,
   },
+  completeButton: {
+    backgroundColor: colors.status.success,
+  },
   disabledButton: {
     opacity: 0.5,
   },
   buttonText: { 
     color: colors.text.primary,
     fontFamily: 'Poppins-Medium',
-    fontSize: 14,
+    fontSize: 9,
   },
   emptyContainer: {
     alignItems: 'center',

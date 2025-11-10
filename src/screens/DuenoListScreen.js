@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, Dimensions, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
@@ -14,6 +14,8 @@ const cardMargin = Math.max(12, screenWidth * 0.03);
 export default function DuenoListScreen({ navigation }) {
   const [duenos, setDuenos] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filteredDuenos, setFilteredDuenos] = useState([]);
 
   useFocusEffect(
     useCallback(() => {
@@ -35,6 +37,7 @@ export default function DuenoListScreen({ navigation }) {
       );
       
       setDuenos(duenosConStats);
+      setFilteredDuenos(duenosConStats);
     } catch (error) {
       console.error('Error cargando dueños:', error);
       Alert.alert('Error', 'No se pudieron cargar los dueños');
@@ -42,6 +45,20 @@ export default function DuenoListScreen({ navigation }) {
       setLoading(false);
     }
   };
+
+  // Filtrar dueños basado en el término de búsqueda
+  useEffect(() => {
+    if (searchTerm.trim() === '') {
+      setFilteredDuenos(duenos);
+    } else {
+      const filtered = duenos.filter(dueno =>
+        dueno.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (dueno.telefono && dueno.telefono.includes(searchTerm)) ||
+        (dueno.cedula && dueno.cedula.includes(searchTerm))
+      );
+      setFilteredDuenos(filtered);
+    }
+  }, [searchTerm, duenos]);
 
   const handleDelete = (dueno) => {
     Alert.alert(
@@ -159,19 +176,56 @@ export default function DuenoListScreen({ navigation }) {
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
-        <View>
-          <Text style={styles.headerTitle}>Dueños</Text>
-          <Text style={styles.headerSubtitle}>{duenos.length} registrados</Text>
+        <View style={styles.headerContent}>
+          <View>
+            <Text style={styles.headerTitle}>Dueños</Text>
+            <Text style={styles.headerSubtitle}>
+              {searchTerm ? `${filteredDuenos.length} de ${duenos.length}` : `${duenos.length} registrados`}
+            </Text>
+          </View>
+          <ActionButton
+            icon="plus"
+            variant="primary"
+            onPress={() => navigation.navigate('AddDueno')}
+          />
         </View>
-        <ActionButton
-          icon="plus"
-          variant="primary"
-          onPress={() => navigation.navigate('AddDueno')}
-        />
+
+        {/* Barra de búsqueda */}
+        <View style={styles.searchContainer}>
+          <MaterialCommunityIcons
+            name="magnify"
+            size={24}
+            color={colors.text.muted}
+            style={styles.searchIcon}
+          />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Buscar por nombre, teléfono o cédula..."
+            placeholderTextColor={colors.text.muted}
+            value={searchTerm}
+            onChangeText={setSearchTerm}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+          {searchTerm.length > 0 && (
+            <TouchableOpacity
+              onPress={() => setSearchTerm('')}
+              style={styles.clearButton}
+            >
+              <MaterialCommunityIcons
+                name="close-circle"
+                size={20}
+                color={colors.text.muted}
+              />
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
+     
+
       <FlatList
-        data={duenos}
+        data={filteredDuenos}
         keyExtractor={(item) => item.id.toString()}
         renderItem={renderDuenoCard}
         contentContainerStyle={styles.listContainer}
@@ -180,17 +234,21 @@ export default function DuenoListScreen({ navigation }) {
           <Card>
             <View style={styles.emptyContainer}>
               <MaterialCommunityIcons
-                name="account-off"
+                name={searchTerm ? "magnify" : "account-off"}
                 size={48}
                 color={colors.text.muted}
               />
-              <Text style={styles.emptyText}>No hay dueños registrados</Text>
-              <ActionButton
-                icon="plus"
-                label="Agregar Dueño"
-                onPress={() => navigation.navigate('AddDueno')}
-                variant="primary"
-              />
+              <Text style={styles.emptyText}>
+                {searchTerm ? `No se encontraron dueños para "${searchTerm}"` : "No hay dueños registrados"}
+              </Text>
+              {!searchTerm && (
+                <ActionButton
+                  icon="plus"
+                  label="Agregar Dueño"
+                  onPress={() => navigation.navigate('AddDueno')}
+                  variant="primary"
+                />
+              )}
             </View>
           </Card>
         }
@@ -205,11 +263,15 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background.primary,
   },
   header: {
+    flexDirection: 'column',
+    gap: 16,
+    padding: cardPadding,
+    backgroundColor: colors.background.card,
+  },
+  headerContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: cardPadding,
-    backgroundColor: colors.background.card,
   },
   headerTitle: {
     fontSize: 28,
@@ -221,6 +283,31 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins-Regular',
     color: colors.text.secondary,
     marginTop: 4,
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.background.card,
+    borderRadius: 12,
+    marginHorizontal: cardPadding,
+    marginBottom: cardPadding,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: colors.border.primary,
+  },
+  searchIcon: {
+    marginRight: 12,
+  },
+  searchInput: {
+    flex: 1,
+    height: 48,
+    fontSize: 16,
+    fontFamily: 'Poppins-Regular',
+    color: colors.text.primary,
+  },
+  clearButton: {
+    padding: 4,
+    marginLeft: 8,
   },
   listContainer: {
     padding: cardPadding,

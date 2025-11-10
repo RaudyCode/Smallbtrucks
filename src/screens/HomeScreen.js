@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Dimensions,
   ScrollView,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -124,11 +125,18 @@ export default function HomeScreen({ navigation }) {
             <View style={styles.header}>
               <View style={styles.headerContent}>
                 <View style={styles.userGreeting}>
-                  <MaterialCommunityIcons 
-                    name="account-circle" 
-                    size={40} 
-                    color={colors.brand.primary} 
-                  />
+                  {user?.photoURL ? (
+                    <Image 
+                      source={{ uri: user.photoURL }} 
+                      style={styles.userAvatar}
+                    />
+                  ) : (
+                    <MaterialCommunityIcons 
+                      name="account-circle" 
+                      size={40} 
+                      color={colors.brand.primary} 
+                    />
+                  )}
                   <View style={styles.greetingText}>
                     <Text style={styles.greetingHello}>Hola, 👋</Text>
                     <Text style={styles.greetingName}>
@@ -292,6 +300,13 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontFamily: 'Poppins-SemiBold',
     color: colors.text.primary,
+  },
+  userAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: colors.brand.primary,
   },
   dateSmall: {
     fontSize: 14,

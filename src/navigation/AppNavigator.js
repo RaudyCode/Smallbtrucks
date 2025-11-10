@@ -147,6 +147,7 @@ function HomeTabs() {
 function AuthStack() {
   return (
     <Stack.Navigator
+      initialRouteName="Login"
       screenOptions={{
         headerShown: false,
         animation: Platform.OS === 'ios' ? 'default' : 'slide_from_right',

@@ -8,11 +8,13 @@ import {
   ScrollView,
   ActivityIndicator,
   Dimensions,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { backupService } from '../services/backupService';
+import { reporteService } from '../services/reporteService';
 import { useAuth } from '../context/AuthContext';
 import colors from '../theme/colors';
 import { Card } from '../components/common';
@@ -210,6 +212,68 @@ export default function BackupScreen({ navigation }) {
     });
   };
 
+  const handleGenerarReporte = async () => {
+    Alert.alert(
+      'Generar Reporte',
+      '¿Deseas generar el reporte de viajes del día de hoy y compartirlo?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Generar',
+          onPress: async () => {
+            try {
+              setLoading(true);
+              const resultado = await reporteService.generarYCompartirReporte();
+              
+              if (resultado.success) {
+                Alert.alert(
+                  '✅ Éxito', 
+                  'Reporte generado correctamente. Se abrirá el selector para compartir.',
+                  [{ text: 'Entendido' }]
+                );
+              } else if (resultado.isEmpty) {
+                Alert.alert(
+                  '📋 Sin registros', 
+                  'No hay viajes registrados para el día de hoy.\n\n¿Deseas generar el reporte vacío de todas formas?',
+                  [
+                    { text: 'No', style: 'cancel' },
+                    { 
+                      text: 'Sí, generar', 
+                      onPress: async () => {
+                        try {
+                          // Forzar generación del PDF vacío
+                          const pdfUri = await reporteService.generarPDFReporte();
+                          await reporteService.compartirPorWhatsApp(pdfUri);
+                          Alert.alert('✅ Éxito', 'Reporte vacío generado correctamente.');
+                        } catch (error) {
+                          Alert.alert('❌ Error', `Error generando reporte vacío: ${error.message}`);
+                        }
+                      }
+                    }
+                  ]
+                );
+              } else {
+                Alert.alert(
+                  '⚠️ Error', 
+                  `No se pudo generar el reporte: ${resultado.error}`,
+                  [{ text: 'Entendido' }]
+                );
+              }
+            } catch (error) {
+              Alert.alert(
+                '❌ Error', 
+                `Error inesperado: ${error.message}`,
+                [{ text: 'Entendido' }]
+              );
+            } finally {
+              setLoading(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -254,11 +318,18 @@ export default function BackupScreen({ navigation }) {
         {/* Información del Usuario */}
         <Card style={styles.userCard}>
           <View style={styles.userHeader}>
-            <MaterialCommunityIcons
-              name="account-circle"
-              size={48}
-              color={colors.brand.primary}
-            />
+            {user.photoURL ? (
+              <Image 
+                source={{ uri: user.photoURL }} 
+                style={styles.userAvatarLarge}
+              />
+            ) : (
+              <MaterialCommunityIcons
+                name="account-circle"
+                size={48}
+                color={colors.brand.primary}
+              />
+            )}
             <View style={styles.userInfo}>
               <Text style={styles.userName}>{user.displayName || 'Usuario'}</Text>
               <Text style={styles.userEmail}>{user.email}</Text>
@@ -342,6 +413,14 @@ export default function BackupScreen({ navigation }) {
             <View style={styles.buttonTextContainer}>
               <Text style={styles.secondaryButtonTitle}>Exportar Localmente</Text>
               <Text style={styles.secondaryButtonSubtitle}>Guarda una copia en tu dispositivo</Text>
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.reportButton} onPress={handleGenerarReporte}>
+            <MaterialCommunityIcons name="file-pdf-box" size={24} color={colors.status.success} />
+            <View style={styles.buttonTextContainer}>
+              <Text style={styles.reportButtonTitle}>Generar Reporte PDF</Text>
+              <Text style={styles.reportButtonSubtitle}>Reporte de viajes del día para compartir</Text>
             </View>
           </TouchableOpacity>
         </View>
@@ -473,6 +552,13 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
     marginTop: 2,
   },
+  userAvatarLarge: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 2,
+    borderColor: colors.brand.primary,
+  },
   scrollContent: {
     padding: cardPadding,
     gap: cardMargin,
@@ -590,6 +676,27 @@ const styles = StyleSheet.create({
     color: colors.brand.primary,
   },
   secondaryButtonSubtitle: {
+    fontSize: 14,
+    fontFamily: 'Poppins-Regular',
+    color: colors.text.secondary,
+    marginTop: 2,
+  },
+  reportButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.background.card,
+    padding: cardPadding,
+    borderRadius: 12,
+    gap: 16,
+    borderWidth: 2,
+    borderColor: colors.status.success,
+  },
+  reportButtonTitle: {
+    fontSize: 16,
+    fontFamily: 'Poppins-SemiBold',
+    color: colors.status.success,
+  },
+  reportButtonSubtitle: {
     fontSize: 14,
     fontFamily: 'Poppins-Regular',
     color: colors.text.secondary,

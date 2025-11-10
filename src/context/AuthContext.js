@@ -1,6 +1,6 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
 import { authService } from '../services/authService';
-import { ActivityIndicator, View, StyleSheet } from 'react-native';
+import { ActivityIndicator, View, StyleSheet, Text } from 'react-native';
 import colors from '../theme/colors';
 
 const AuthContext = createContext({});
@@ -8,36 +8,102 @@ const AuthContext = createContext({});
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [initializing, setInitializing] = useState(true);
 
   useEffect(() => {
+    console.log('🚀 Inicializando AuthContext...');
+    
     // Observar cambios en el estado de autenticación
     const unsubscribe = authService.onAuthChange((authUser) => {
-      console.log('🔄 Auth state changed:', authUser ? authUser.email : 'No user');
+      console.log('🔄 Auth state changed:', authUser ? `${authUser.email} (${authUser.uid})` : 'No user');
       setUser(authUser);
+      
+      // Solo en la primera carga, marcamos como inicializado
+      if (initializing) {
+        console.log('✅ Auth inicializado, usuario:', authUser ? 'Logueado' : 'No logueado');
+        setInitializing(false);
+      }
+      
       setLoading(false);
     });
 
-    return unsubscribe;
+    // Timeout de seguridad por si Firebase no responde
+    const timeout = setTimeout(() => {
+      console.log('⚠️ Timeout de inicialización, continuando sin usuario');
+      if (initializing) {
+        setInitializing(false);
+        setLoading(false);
+      }
+    }, 3000); // 3 segundos máximo
+
+    return () => {
+      unsubscribe();
+      clearTimeout(timeout);
+    };
   }, []);
 
   const login = async (email, password) => {
-    const result = await authService.login(email, password);
-    return result;
+    setLoading(true);
+    try {
+      const result = await authService.login(email, password);
+      console.log('✅ Login exitoso en AuthContext');
+      return result;
+    } catch (error) {
+      console.error('❌ Error en login AuthContext:', error);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
   };
 
   const register = async (email, password, displayName) => {
-    const result = await authService.register(email, password, displayName);
-    return result;
+    setLoading(true);
+    try {
+      const result = await authService.register(email, password, displayName);
+      console.log('✅ Registro exitoso en AuthContext');
+      return result;
+    } catch (error) {
+      console.error('❌ Error en registro AuthContext:', error);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loginWithGoogle = async () => {
+    setLoading(true);
+    try {
+      const result = await authService.loginWithGoogle();
+      console.log('✅ Login con Google exitoso en AuthContext');
+      return result;
+    } catch (error) {
+      console.error('❌ Error en login con Google AuthContext:', error);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
   };
 
   const logout = async () => {
-    await authService.logout();
+    setLoading(true);
+    try {
+      await authService.logout();
+      console.log('✅ Logout exitoso en AuthContext');
+    } catch (error) {
+      console.error('❌ Error en logout AuthContext:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  if (loading) {
+  // Mostrar pantalla de carga solo durante la inicialización
+  if (initializing || loading) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={colors.brand.primary} />
+        <Text style={styles.loadingText}>
+          {initializing ? 'Verificando sesión...' : 'Cargando...'}
+        </Text>
       </View>
     );
   }
@@ -48,6 +114,7 @@ export const AuthProvider = ({ children }) => {
         user,
         isAuthenticated: !!user,
         login,
+        loginWithGoogle,
         register,
         logout,
       }}
@@ -71,5 +138,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: colors.background.primary,
+    gap: 16,
+  },
+  loadingText: {
+    fontSize: 16,
+    fontFamily: 'Poppins-Regular',
+    color: colors.text.secondary,
+    marginTop: 8,
   },
 });

@@ -2,7 +2,7 @@
   "expo": {
     "name": "SmallBtrucks",
     "slug": "small-btrucks",
-    "version": "1.0.0",
+    "version": "1.2.0",
     "scheme": "com.smallbtrucks.app",
     "icon": "./assets/icon.png",
     "orientation": "portrait",
@@ -24,9 +24,18 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#ffffff"
-      }
-     
+      },
+      "googleServicesFile": "./android/app/google-services.json"
     },
+    "plugins": [
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.687559260753-placeholder"
+        }
+      ],
+      "expo-sqlite"
+    ],
     "extra": {
       "eas": {
         "projectId": "325db8a0-13b5-4617-a471-d161bcec98cd"

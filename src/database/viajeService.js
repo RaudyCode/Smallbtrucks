@@ -41,17 +41,11 @@ export const viajeService = {
       );
       
       if (!viaje) throw new Error('Viaje no encontrado');
-      if (viaje.viajes_completados >= viaje.cantidad_viajes) {
-        throw new Error('Ya se completaron todos los viajes programados');
-      }
 
       await db.runAsync(
         `UPDATE Viaje 
          SET viajes_completados = viajes_completados + 1,
-             estado = CASE 
-               WHEN viajes_completados + 1 >= cantidad_viajes THEN 'Completado'
-               ELSE 'En proceso'
-             END
+             estado = 'En proceso'
          WHERE id = ?`,
         [id]
       );
@@ -99,6 +93,32 @@ export const viajeService = {
     }
   },
 
+  // Marcar pedido como completado
+  marcarComoCompletado: async (id) => {
+    try {
+      const viaje = await db.getFirstAsync(
+        `SELECT estado FROM Viaje WHERE id = ?`,
+        [id]
+      );
+      
+      if (!viaje) throw new Error('Viaje no encontrado');
+      if (viaje.estado === 'Completado') {
+        throw new Error('El pedido ya está marcado como completado');
+      }
+
+      await db.runAsync(
+        `UPDATE Viaje SET estado = 'Completado' WHERE id = ?`,
+        [id]
+      );
+      
+      console.log(`✅ Pedido marcado como completado para viaje ID: ${id}`);
+      return true;
+    } catch (error) {
+      console.error('Error marcando como completado:', error);
+      throw error;
+    }
+  },
+
   // Actualizar estado
   updateEstado: async (id, estado) => {
     try {
@@ -120,6 +140,7 @@ export const viajeService = {
         SELECT 
           v.*,
           c.nombre as camion_nombre,
+          c.placa as camion_placa,
           d.nombre as destino_nombre,
           d.ubicacion as destino_ubicacion
         FROM Viaje v
@@ -140,6 +161,7 @@ export const viajeService = {
         `SELECT 
           v.*,
           c.nombre as camion_nombre,
+          c.placa as camion_placa,
           d.nombre as destino_nombre,
           d.ubicacion as destino_ubicacion
         FROM Viaje v
@@ -162,6 +184,7 @@ export const viajeService = {
         `SELECT 
           v.*,
           c.nombre as camion_nombre,
+          c.placa as camion_placa,
           d.nombre as destino_nombre,
           d.ubicacion as destino_ubicacion
         FROM Viaje v
@@ -184,6 +207,7 @@ export const viajeService = {
         `SELECT 
           v.*,
           c.nombre as camion_nombre,
+          c.placa as camion_placa,
           d.nombre as destino_nombre,
           d.ubicacion as destino_ubicacion
         FROM Viaje v
@@ -289,6 +313,7 @@ export const viajeService = {
         SELECT 
           v.fecha_programada as fecha_entrega,
           c.nombre as camion_nombre,
+          c.placa as camion_placa,
           d.nombre as destino_nombre,
           v.id as viaje_id,
           COUNT(*) as total_entregas

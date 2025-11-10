@@ -15,8 +15,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { authService } from '../services/authService';
 import colors from '../theme/colors';
+import { useAuth } from '../context/AuthContext';
 
 export default function LoginScreen({ navigation }) {
+  const { login, loginWithGoogle } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -34,6 +36,18 @@ export default function LoginScreen({ navigation }) {
       // La navegación se manejará automáticamente por el AuthContext
     } catch (error) {
       Alert.alert('Error al iniciar sesión', error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    try {
+      setLoading(true);
+      await loginWithGoogle();
+      // La navegación se maneja automáticamente en AuthContext
+    } catch (error) {
+      Alert.alert('Error', error.message || 'Error con Google Sign-In');
     } finally {
       setLoading(false);
     }
@@ -169,6 +183,20 @@ export default function LoginScreen({ navigation }) {
               )}
             </TouchableOpacity>
 
+            {/* Google Sign-In Button */}
+            <TouchableOpacity
+              style={[styles.googleButton, loading && styles.disabledButton]}
+              onPress={handleGoogleLogin}
+              disabled={loading}
+            >
+              <MaterialCommunityIcons
+                name="google"
+                size={24}
+                color="#DB4437"
+              />
+              <Text style={styles.googleButtonText}>Iniciar sesión con Google</Text>
+            </TouchableOpacity>
+
             {/* Register Link */}
             <View style={styles.registerContainer}>
               <Text style={styles.registerText}>¿No tienes cuenta? </Text>
@@ -270,6 +298,31 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontFamily: 'Poppins-SemiBold',
     color: colors.text.primary,
+  },
+  googleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    height: 56,
+    gap: 12,
+    borderWidth: 1,
+    borderColor: '#dadce0',
+    marginTop: 16,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  googleButtonText: {
+    fontSize: 16,
+    fontFamily: 'Poppins-SemiBold',
+    color: '#3c4043',
   },
   registerContainer: {
     flexDirection: 'row',

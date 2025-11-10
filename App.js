@@ -13,7 +13,7 @@ import {
 
 import AppNavigator from './src/navigation/AppNavigator';
 import { AuthProvider } from './src/context/AuthContext';
-import { migrateDatabase } from './src/database/migration';
+import { initDatabase } from './src/database/database';
 import { colors } from './src/theme/colors';
 
 export default function App() {
@@ -33,15 +33,12 @@ export default function App() {
 
   const initializeDB = async () => {
     try {
-      const success = await migrateDatabase();
-      if (success) {
-        console.log('Base de datos inicializada y migrada correctamente');
-        setIsDBReady(true);
-      } else {
-        throw new Error('Error en la migración de la base de datos');
-      }
+      console.log('🚀 Inicializando aplicación...');
+      await initDatabase();
+      console.log('✅ Base de datos inicializada correctamente');
+      setIsDBReady(true);
     } catch (err) {
-      console.error('Error inicializando app:', err);
+      console.error('❌ Error inicializando app:', err);
       setError(err.message);
     }
   };

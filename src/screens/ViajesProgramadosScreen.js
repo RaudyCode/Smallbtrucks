@@ -37,23 +37,27 @@ export default function ViajesProgramadosScreen({ navigation }) {
     }, [loadViajes])
   );
 
-  const handleComplete = async (viajeId) => {
-    try {
-      const viaje = viajes.find(v => v.id === viajeId);
-      if (!viaje) return;
-
-      // Actualizar estado a completado
-      await viajeService.update(viajeId, {
-        ...viaje,
-        estado: 'Completado'
-      });
-
-      loadViajes();
-      Alert.alert('Éxito', 'Viaje marcado como completado');
-    } catch (error) {
-      console.error('Error completando viaje:', error);
-      Alert.alert('Error', 'No se pudo completar el viaje');
-    }
+  const handleComplete = (viajeId, destinoNombre) => {
+    Alert.alert(
+      'Marcar como Completado',
+      `¿Estás seguro de marcar como completado el pedido a ${destinoNombre}? No podrás agregar más entregas.`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Completar',
+          style: 'default',
+          onPress: async () => {
+            try {
+              await viajeService.marcarComoCompletado(viajeId);
+              loadViajes();
+              Alert.alert('Éxito', 'Pedido marcado como completado');
+            } catch (error) {
+              Alert.alert('Error', error.message || 'No se pudo completar el pedido');
+            }
+          },
+        },
+      ]
+    );
   };
 
   const handleIncrement = async (viajeId) => {
@@ -128,22 +132,28 @@ export default function ViajesProgramadosScreen({ navigation }) {
         </View>
       </View>
       
-      {/* Barra de progreso */}
+      {/* Información del camión */}
+      <View style={styles.viajeInfo}>
+        <MaterialCommunityIcons 
+          name="truck" 
+          size={20} 
+          color={colors.text.secondary} 
+        />
+        <Text style={styles.viajeInfoText}>
+          {item.camion_nombre}
+          {item.camion_placa && <Text style={styles.placaText}> ({item.camion_placa})</Text>}
+        </Text>
+      </View>
+      
+      {/* Información de viajes */}
       <View style={styles.progressContainer}>
         <View style={styles.progressHeader}>
           <Text style={styles.progressText}>
-            Progreso: {item.viajes_completados || 0}/{item.cantidad_viajes}
+            Viajes realizados: {item.viajes_completados || 0}
           </Text>
-          <Text style={styles.progressPercentage}>
-            {Math.round(((item.viajes_completados || 0) / item.cantidad_viajes) * 100)}%
-          </Text>
-        </View>
-        <View style={styles.progressBarBg}>
-          <View 
-            style={[
-              styles.progressBarFill, 
-              { width: `${((item.viajes_completados || 0) / item.cantidad_viajes) * 100}%` }
-            ]} 
+          <StatusBadge 
+            status={item.estado} 
+            style={styles.statusBadge}
           />
         </View>
       </View>
@@ -174,10 +184,10 @@ export default function ViajesProgramadosScreen({ navigation }) {
           style={[
             styles.controlButton, 
             styles.decrementButton,
-            (item.viajes_completados || 0) === 0 && styles.disabledButton
+            ((item.viajes_completados || 0) === 0 || item.estado === 'Completado') && styles.disabledButton
           ]}
           onPress={() => handleDecrement(item.id)}
-          disabled={(item.viajes_completados || 0) === 0}
+          disabled={(item.viajes_completados || 0) === 0 || item.estado === 'Completado'}
         >
           <MaterialCommunityIcons name="minus" size={20} color={colors.text.primary} />
           <Text style={styles.buttonText}>Restar</Text>
@@ -187,14 +197,27 @@ export default function ViajesProgramadosScreen({ navigation }) {
           style={[
             styles.controlButton, 
             styles.incrementButton,
-            (item.viajes_completados || 0) >= item.cantidad_viajes && styles.disabledButton
+            item.estado === 'Completado' && styles.disabledButton
           ]}
           onPress={() => handleIncrement(item.id)}
-          disabled={(item.viajes_completados || 0) >= item.cantidad_viajes}
+          disabled={item.estado === 'Completado'}
         >
           <MaterialCommunityIcons name="plus" size={20} color={colors.text.primary} />
           <Text style={styles.buttonText}>Entregado</Text>
         </TouchableOpacity>
+        
+        {item.estado !== 'Completado' && (
+          <TouchableOpacity 
+            style={[
+              styles.controlButton, 
+              styles.completeButton
+            ]}
+            onPress={() => handleComplete(item.id, item.destino_nombre)}
+          >
+            <MaterialCommunityIcons name="check-circle" size={20} color={colors.text.primary} />
+            <Text style={styles.buttonText}>Completar</Text>
+          </TouchableOpacity>
+        )}
       </View>
     </Card>
   );
@@ -335,6 +358,11 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins-Regular',
     color: colors.text.secondary,
   },
+  placaText: {
+    fontSize: 14,
+    fontFamily: 'Poppins-Medium',
+    color: colors.brand.primary,
+  },
   buttonsContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -345,7 +373,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: 18,
     paddingVertical: 8,
     borderRadius: 8,
     gap: 8,
@@ -361,7 +389,7 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   buttonText: {
-    fontSize: 14,
+    fontSize: 9,
     fontFamily: 'Poppins-Medium',
     color: colors.text.primary,
   },
@@ -435,7 +463,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     gap: 8,
     borderRadius: 8,
-    backgroundColor: colors.status.successLight,
+    backgroundColor: colors.status.success,
   },
   completeButtonText: {
     fontSize: 16,

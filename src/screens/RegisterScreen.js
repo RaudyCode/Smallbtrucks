@@ -15,8 +15,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { authService } from '../services/authService';
 import colors from '../theme/colors';
+import { useAuth } from '../context/AuthContext';
 
 export default function RegisterScreen({ navigation }) {
+  const { register, loginWithGoogle } = useAuth();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -44,15 +46,22 @@ export default function RegisterScreen({ navigation }) {
 
     try {
       setLoading(true);
-      await authService.register(email, password, name);
-      Alert.alert(
-        '¡Éxito!',
-        'Tu cuenta ha sido creada correctamente',
-        [{ text: 'OK' }]
-      );
-      // La navegación se manejará automáticamente por el AuthContext
+      await register(email, password, name);
+      // La navegación se maneja automáticamente en AuthContext
     } catch (error) {
-      Alert.alert('Error al registrarse', error.message);
+      Alert.alert('Error', error.message || 'Error al crear la cuenta');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleRegister = async () => {
+    try {
+      setLoading(true);
+      await loginWithGoogle();
+      // La navegación se maneja automáticamente en AuthContext
+    } catch (error) {
+      Alert.alert('Error', error.message || 'Error con Google Sign-In');
     } finally {
       setLoading(false);
     }
@@ -225,11 +234,25 @@ export default function RegisterScreen({ navigation }) {
               )}
             </TouchableOpacity>
 
+            {/* Google Sign-In Button */}
+            <TouchableOpacity
+              style={[styles.googleButton, loading && styles.disabledButton]}
+              onPress={handleGoogleRegister}
+              disabled={loading}
+            >
+              <MaterialCommunityIcons
+                name="google"
+                size={24}
+                color="#4285f4"
+              />
+              <Text style={styles.googleButtonText}>Registrarse con Google</Text>
+            </TouchableOpacity>
+
             {/* Login Link */}
             <View style={styles.loginContainer}>
               <Text style={styles.loginText}>¿Ya tienes cuenta? </Text>
               <TouchableOpacity
-                onPress={() => navigation.goBack()}
+                onPress={() => navigation.navigate('Login')}
                 disabled={loading}
               >
                 <Text style={styles.loginLink}>Inicia sesión</Text>
@@ -334,6 +357,30 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontFamily: 'Poppins-SemiBold',
     color: colors.text.primary,
+  },
+  googleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    height: 56,
+    gap: 12,
+    borderWidth: 1,
+    borderColor: '#dadce0',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.22,
+    shadowRadius: 2.22,
+    elevation: 3,
+  },
+  googleButtonText: {
+    fontSize: 16,
+    fontFamily: 'Poppins-SemiBold',
+    color: '#3c4043',
   },
   loginContainer: {
     flexDirection: 'row',
