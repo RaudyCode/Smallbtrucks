@@ -2,7 +2,7 @@
   "expo": {
     "name": "SmallBtrucks",
     "slug": "small-btrucks",
-    "version": "1.2.0",
+    "version": "1.5.0",
     "scheme": "com.smallbtrucks.app",
     "icon": "./assets/icon.png",
     "orientation": "portrait",
@@ -21,6 +21,11 @@
     },
     "android": {
       "package": "com.raudy.camionapp",
+      "permissions": [
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.WAKE_LOCK"
+      ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#ffffff"
@@ -34,7 +39,8 @@
           "iosUrlScheme": "com.googleusercontent.apps.687559260753-placeholder"
         }
       ],
-      "expo-sqlite"
+      "expo-sqlite",
+      "expo-secure-store"
     ],
     "extra": {
       "eas": {

@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getStorage } from 'firebase/storage';
-import { getAuth } from 'firebase/auth';
+import { getAuth, initializeAuth, getReactNativePersistence } from 'firebase/auth';
 
 // Tu configuración de Firebase
 // IMPORTANTE: Reemplaza estos valores con los de tu proyecto Firebase
@@ -16,8 +16,19 @@ const firebaseConfig = {
 // Inicializar Firebase
 const app = initializeApp(firebaseConfig);
 
+// Para React Native, Firebase Auth maneja la persistencia automáticamente
+// Solo necesitamos asegurarnos de usar getAuth correctamente
+let auth;
+try {
+  auth = getAuth(app);
+  console.log('✅ Firebase Auth inicializado correctamente');
+} catch (error) {
+  console.error('❌ Error inicializando Firebase Auth:', error);
+  auth = getAuth(app);
+}
+
 // Inicializar servicios
 export const storage = getStorage(app);
-export const auth = getAuth(app);
+export { auth };
 
 export default app;

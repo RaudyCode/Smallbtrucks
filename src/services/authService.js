@@ -9,6 +9,7 @@ import {
   GoogleAuthProvider,
   signInWithCredential
 } from 'firebase/auth';
+import { persistenceService } from './persistenceService';
 
 // Importar Google Sign-In solo si está disponible
 let GoogleSignin;
@@ -16,11 +17,16 @@ try {
   const googleSigninModule = require('@react-native-google-signin/google-signin');
   GoogleSignin = googleSigninModule.GoogleSignin;
   
-  // Configurar Google Sign-In solo si está disponible
+  // Configurar Google Sign-In - REQUIERE configuración en Firebase Console
   GoogleSignin.configure({
-    webClientId: '687559260753-REEMPLAZA_CON_TU_WEB_CLIENT_ID.apps.googleusercontent.com', // Ver GOOGLE_SIGNIN_SETUP.md
+    // IMPORTANTE: Estos son IDs temporales - DEBEN reemplazarse con los reales de Firebase Console
+    webClientId: '1:687559260753:web:95f89217e877b4f460d670', // ⚠️ TEMPORAL - Ver GOOGLE_SIGNIN_FIX.md
+    scopes: ['profile', 'email'],
+    offlineAccess: true,
+    hostedDomain: '',
+    forceCodeForRefreshToken: true,
   });
-  console.log('✅ Google Sign-In configurado correctamente');
+  console.log('⚠️ Google Sign-In configurado con IDs temporales - Ver GOOGLE_SIGNIN_FIX.md para configuración real');
 } catch (error) {
   console.log('⚠️ Google Sign-In no disponible en Expo Go:', error.message);
   GoogleSignin = null;
@@ -72,15 +78,17 @@ export const authService = {
       const user = userCredential.user;
       
       console.log('✅ Sesión iniciada exitosamente:', user.uid);
-      console.log('📱 Sesión persistirá automáticamente en React Native');
+      console.log('📱 Firebase Auth persistirá la sesión automáticamente en React Native');
+      
+      const userData = {
+        uid: user.uid,
+        email: user.email,
+        displayName: user.displayName,
+      };
       
       return {
         success: true,
-        user: {
-          uid: user.uid,
-          email: user.email,
-          displayName: user.displayName,
-        },
+        user: userData,
       };
     } catch (error) {
       console.error('❌ Error iniciando sesión:', error);
@@ -100,40 +108,81 @@ export const authService = {
 
       console.log('🔐 Iniciando sesión con Google...');
       
-      // Verificar si Google Play Services está disponible
-      await GoogleSignin.hasPlayServices();
+      // Verificar configuración
+      console.log('🔍 Verificando configuración de Google Sign-In...');
       
-      // Obtener información del usuario de Google
-      const userInfo = await GoogleSignin.signIn();
+      try {
+        // Verificar si Google Play Services está disponible
+        await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+        console.log('✅ Google Play Services disponible');
+      } catch (playServicesError) {
+        console.error('❌ Google Play Services error:', playServicesError);
+        throw { 
+          message: 'Google Play Services no disponible o desactualizado', 
+          code: 'google/play_services_error',
+          originalError: playServicesError
+        };
+      }
       
-      // Crear credencial de Firebase con el token de Google
-      const googleCredential = GoogleAuthProvider.credential(userInfo.idToken);
+      try {
+        // Obtener información del usuario de Google
+        console.log('📱 Iniciando proceso de sign-in...');
+        const userInfo = await GoogleSignin.signIn();
+        console.log('✅ UserInfo obtenido:', userInfo.user?.email);
+        
+        if (!userInfo.idToken) {
+          throw { 
+            message: 'No se pudo obtener el token de Google. Verifica la configuración en Firebase Console.', 
+            code: 'google/no_token' 
+          };
+        }
+        
+        // Crear credencial de Firebase con el token de Google
+        const googleCredential = GoogleAuthProvider.credential(userInfo.idToken);
+        
+        // Iniciar sesión en Firebase con la credencial de Google
+        const userCredential = await signInWithCredential(auth, googleCredential);
+        const user = userCredential.user;
+        
+        console.log('✅ Sesión con Google iniciada exitosamente:', user.uid);
+        console.log('📱 Sesión persistirá automáticamente');
+        
+        return {
+          success: true,
+          user: {
+            uid: user.uid,
+            email: user.email,
+            displayName: user.displayName,
+            photoURL: user.photoURL,
+          },
+        };
+        
+      } catch (signInError) {
+        console.error('❌ Error en Google Sign-In:', signInError);
+        
+        // Manejo específico de errores de Google Sign-In
+        if (signInError.code === 'sign_in_cancelled') {
+          throw { message: 'Inicio de sesión cancelado', code: 'google/cancelled' };
+        } else if (signInError.code === 'in_progress') {
+          throw { message: 'Operación en progreso', code: 'google/in_progress' };
+        } else if (signInError.code === 'play_services_not_available') {
+          throw { message: 'Google Play Services no disponible', code: 'google/play_services' };
+        } else if (signInError.message?.includes('DEVELOPER_ERROR')) {
+          throw { 
+            message: 'Error de configuración: Verifica el webClientId en Firebase Console. Ve a Authentication > Sign-in method > Google > Configuración web SDK.', 
+            code: 'google/developer_error',
+            originalError: signInError
+          };
+        }
+        
+        throw signInError;
+      }
       
-      // Iniciar sesión en Firebase con la credencial de Google
-      const userCredential = await signInWithCredential(auth, googleCredential);
-      const user = userCredential.user;
-      
-      console.log('✅ Sesión con Google iniciada exitosamente:', user.uid);
-      console.log('📱 Sesión persistirá automáticamente');
-      
-      return {
-        success: true,
-        user: {
-          uid: user.uid,
-          email: user.email,
-          displayName: user.displayName,
-          photoURL: user.photoURL,
-        },
-      };
     } catch (error) {
-      console.error('❌ Error con Google Sign-In:', error);
+      console.error('❌ Error completo con Google Sign-In:', error);
       
-      if (error.code === 'sign_in_cancelled') {
-        throw { message: 'Inicio de sesión cancelado', code: 'google/cancelled' };
-      } else if (error.code === 'in_progress') {
-        throw { message: 'Operación en progreso', code: 'google/in_progress' };
-      } else if (error.code === 'play_services_not_available') {
-        throw { message: 'Google Play Services no disponible', code: 'google/play_services' };
+      if (error.code?.startsWith('google/')) {
+        throw error; // Ya tiene formato correcto
       }
       
       throw authService.getErrorMessage(error);

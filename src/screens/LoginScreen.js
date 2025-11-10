@@ -47,7 +47,27 @@ export default function LoginScreen({ navigation }) {
       await loginWithGoogle();
       // La navegación se maneja automáticamente en AuthContext
     } catch (error) {
-      Alert.alert('Error', error.message || 'Error con Google Sign-In');
+      console.error('Error Google Login:', error);
+      
+      // Manejo específico de errores de Google Sign-In
+      if (error.code === 'google/developer_error') {
+        Alert.alert(
+          'Configuración Pendiente',
+          'Google Sign-In requiere configuración adicional en Firebase Console.\n\nPor ahora, usa el login con email y contraseña.\n\nVer archivo GOOGLE_SIGNIN_FIX.md para instrucciones completas.',
+          [{ text: 'Entendido' }]
+        );
+      } else if (error.code === 'google/not_available') {
+        Alert.alert(
+          'Google Sign-In No Disponible',
+          'Esta función requiere la APK compilada para funcionar completamente.\n\nUsa login con email por ahora.',
+          [{ text: 'Entendido' }]
+        );
+      } else if (error.code === 'google/cancelled') {
+        // No mostrar error si el usuario cancela
+        console.log('Usuario canceló Google Sign-In');
+      } else {
+        Alert.alert('Error', error.message || 'Error con Google Sign-In');
+      }
     } finally {
       setLoading(false);
     }

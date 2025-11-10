@@ -18,6 +18,7 @@ import { colors } from '../theme/colors';
 import { Card, ActionButton } from '../components/common';
 import { TruckCard } from '../components/cards';
 import { useAuth } from '../context/AuthContext';
+import { persistenceService } from '../services/persistenceService';
 
 const { width: screenWidth } = Dimensions.get('window');
 const isTablet = screenWidth > 768;
@@ -52,6 +53,12 @@ export default function HomeScreen({ navigation }) {
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
+      
+      // Verificar persistencia (solo para debug en desarrollo)
+      if (__DEV__) {
+        persistenceService.debugPersistence();
+      }
+      
       const [camionesData, statsData] = await Promise.all([
         camionService.getAll(),
         viajeService.getStats()

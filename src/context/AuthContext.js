@@ -16,6 +16,11 @@ export const AuthProvider = ({ children }) => {
     // Observar cambios en el estado de autenticación
     const unsubscribe = authService.onAuthChange((authUser) => {
       console.log('🔄 Auth state changed:', authUser ? `${authUser.email} (${authUser.uid})` : 'No user');
+      
+      if (authUser) {
+        console.log('✅ Usuario autenticado - sesión persistirá automáticamente');
+      }
+      
       setUser(authUser);
       
       // Solo en la primera carga, marcamos como inicializado
@@ -27,20 +32,21 @@ export const AuthProvider = ({ children }) => {
       setLoading(false);
     });
 
-    // Timeout de seguridad por si Firebase no responde
+    // Timeout de seguridad extendido para apps nativas
     const timeout = setTimeout(() => {
-      console.log('⚠️ Timeout de inicialización, continuando sin usuario');
+      console.log('⚠️ Timeout de inicialización, continuando...');
       if (initializing) {
+        console.log('📱 Firebase Auth debería manejar persistencia automáticamente en React Native');
         setInitializing(false);
         setLoading(false);
       }
-    }, 3000); // 3 segundos máximo
+    }, 5000); // 5 segundos para apps nativas
 
     return () => {
       unsubscribe();
       clearTimeout(timeout);
     };
-  }, []);
+  }, [initializing]);
 
   const login = async (email, password) => {
     setLoading(true);
